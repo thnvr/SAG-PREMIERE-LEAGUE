@@ -1,0 +1,30 @@
+{
+  "name": "sag-premiere-leagues",
+  "version": "1.0.0",
+  "description": "SAG Premiere Leagues - Professional Football Auction Platform",
+  "private": true,
+  "scripts": {
+    "server": "node server/index.js",
+    "client": "cd client && npx vite --host",
+    "client:build": "cd client && npx vite build",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "setup": "node server/db/setup.js",
+    "seed": "node server/db/seed.js",
+    "start": "npm run setup && npm run dev"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.10.0",
+    "socket.io": "^4.7.4",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^9.0.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "csv-parse": "^5.5.3",
+    "csv-stringify": "^6.4.5",
+    "concurrently": "^8.2.2"
+  }
+}
