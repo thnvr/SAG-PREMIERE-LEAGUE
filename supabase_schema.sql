@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS public.spectator_comments (
   id BIGSERIAL PRIMARY KEY,
   author_name TEXT NOT NULL,
   message TEXT NOT NULL,
+  reaction TEXT DEFAULT '🔥',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

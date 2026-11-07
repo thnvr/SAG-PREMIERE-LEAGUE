@@ -136,7 +136,7 @@ function matchesStatus(player, filter) {
   if (!filter || filter === 'ALL') return true;
   const s = (player.auction_status || player.status || '').toLowerCase();
   if (filter === 'available' || filter === 'upcoming') {
-    return s === 'available' || s === 'upcoming';
+    return s === 'available' || s === 'upcoming' || s === 'bidding';
   }
   return s === filter.toLowerCase();
 }
@@ -303,15 +303,37 @@ export const playersAPI = {
   },
 
   update: async (id, playerData) => {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('players').update(playerData).eq('id', id);
-      } catch (err) {}
-    }
-
     const local = getLocalPlayers();
     const updated = local.map((p) => (p.id === id ? { ...p, ...playerData } : p));
     saveLocalPlayers(updated);
+
+    if (isSupabaseConfigured) {
+      try {
+        // Only update valid database columns to avoid Postgres constraint errors
+        const cleanPlayerRow = {};
+        if (playerData.name) cleanPlayerRow.name = playerData.name;
+        if (playerData.base_price != null) cleanPlayerRow.base_price = Number(playerData.base_price);
+        if (playerData.sold_price != null) cleanPlayerRow.sold_price = Number(playerData.sold_price);
+        if (playerData.status) {
+          cleanPlayerRow.status = playerData.status === 'bidding' ? 'available' : playerData.status;
+        }
+        if (playerData.team_id || playerData.sold_to_team_id) {
+          cleanPlayerRow.team_id = playerData.sold_to_team_id || playerData.team_id;
+        }
+        if (playerData.photo_url != null) cleanPlayerRow.photo_url = playerData.photo_url;
+        if (playerData.photo_scale != null) cleanPlayerRow.photo_scale = Number(playerData.photo_scale);
+        if (playerData.photo_x != null) cleanPlayerRow.photo_x = Number(playerData.photo_x);
+        if (playerData.photo_y != null) cleanPlayerRow.photo_y = Number(playerData.photo_y);
+        if (playerData.is_shortlisted != null) cleanPlayerRow.is_shortlisted = Boolean(playerData.is_shortlisted);
+
+        if (Object.keys(cleanPlayerRow).length > 0) {
+          await supabase.from('players').update(cleanPlayerRow).eq('id', id);
+        }
+      } catch (err) {
+        console.warn('Supabase player update error:', err);
+      }
+    }
+
     return { ...playerData, id };
   },
 
@@ -391,49 +413,107 @@ export const playersAPI = {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  AUCTION API
+//  AUCTION API (Resilient Cloud & Local Sync)
 // ══════════════════════════════════════════════════════════════════════════
 export const auctionAPI = {
   getCurrentState: async () => {
+    let session = getLocalSession();
+
     if (isSupabaseConfigured) {
       try {
+        // Query exact row id=1 without postgrest join dependencies
         const { data, error } = await supabase
           .from('auction_sessions')
-          .select(`*, current_player:players(*), leading_team:teams(*)`)
-          .order('id', { ascending: false })
-          .limit(1)
+          .select('*')
+          .eq('id', 1)
           .single();
+
         if (!error && data) {
-          saveLocalSession(data);
-          return data;
+          session = {
+            id: 1,
+            status: data.status || 'waiting',
+            bidding_status: data.status || 'waiting',
+            current_player_id: data.current_player_id,
+            current_bid: Number(data.current_bid) || 0,
+            current_highest_bid: Number(data.current_bid) || 0,
+            leading_team_id: data.leading_team_id,
+            bid_increment: Number(data.bid_increment) || 5000,
+            updated_at: data.updated_at,
+          };
+          saveLocalSession(session);
+        } else if (error) {
+          console.warn('[Supabase] getCurrentState error:', error.message);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[Supabase] getCurrentState network error:', err.message);
+      }
     }
-    return getLocalSession();
+
+    // Attach player and team
+    let currentPlayer = null;
+    let leadingTeam = null;
+
+    if (session.current_player_id) {
+      currentPlayer = await playersAPI.getById(session.current_player_id);
+    }
+    if (session.leading_team_id) {
+      leadingTeam = await teamsAPI.getById(session.leading_team_id);
+    }
+
+    return {
+      ...session,
+      current_player: currentPlayer,
+      leading_team: leadingTeam,
+    };
   },
 
   upsertSession: async (sessionData) => {
-    const normalized = {
+    const rawBid = sessionData.current_bid != null 
+      ? sessionData.current_bid 
+      : (sessionData.current_highest_bid != null ? sessionData.current_highest_bid : 0);
+    const rawStatus = sessionData.status || sessionData.bidding_status || 'active';
+    const rawInc = sessionData.bid_increment || 5000;
+    const curPId = sessionData.current_player_id || null;
+    const leadTeamId = sessionData.leading_team_id || null;
+
+    // Strict schema-clean payload for Postgres — avoids column-not-found errors
+    const cleanDbRow = {
       id: 1,
-      ...sessionData,
+      status: rawStatus,
+      current_player_id: curPId,
+      current_bid: Number(rawBid),
+      leading_team_id: leadTeamId,
+      bid_increment: Number(rawInc),
       updated_at: new Date().toISOString(),
     };
 
-    saveLocalSession(normalized);
+    saveLocalSession({
+      ...cleanDbRow,
+      current_highest_bid: Number(rawBid),
+      bidding_status: rawStatus,
+    });
 
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('auction_sessions')
-          .upsert(normalized, { onConflict: 'id' })
-          .select()
-          .single();
-        if (!error && data) return data;
+          .upsert(cleanDbRow, { onConflict: 'id' });
+
+        if (error) {
+          console.error('[Supabase] upsertSession rejected:', error.message);
+        } else {
+          console.log('[Supabase] Successfully synced auction session to cloud!');
+        }
       } catch (err) {
-        console.warn('Upsert session error:', err);
+        console.error('[Supabase] upsertSession exception:', err.message);
       }
     }
-    return normalized;
+
+    return {
+      ...cleanDbRow,
+      current_highest_bid: Number(rawBid),
+      bidding_status: rawStatus,
+    };
   },
 
   nominate: async (playerId, overrides = {}) => {
@@ -457,7 +537,6 @@ export const auctionAPI = {
       status: 'active',
       bidding_status: 'active',
       bid_increment: 5000,
-      updated_at: new Date().toISOString(),
     };
 
     return await auctionAPI.upsertSession(sessionObj);
@@ -472,7 +551,6 @@ export const auctionAPI = {
       leading_team_id: teamId,
       status: 'active',
       bidding_status: 'active',
-      updated_at: new Date().toISOString(),
     };
     await auctionAPI.upsertSession(sessionObj);
 
@@ -546,18 +624,19 @@ export const adminAPI = {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  SPECTATOR CHAT API
+//  SPECTATOR CHAT API (Realtime Cloud Sync)
 // ══════════════════════════════════════════════════════════════════════════
 export const spectatorAPI = {
   getComments: async () => {
     if (isSupabaseConfigured) {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('spectator_comments')
           .select('*')
           .order('created_at', { ascending: true })
           .limit(100);
-        if (data && data.length > 0) {
+
+        if (!error && data && data.length > 0) {
           const list = data.map((d) => ({
             id: d.id,
             user: d.author_name,
@@ -586,7 +665,6 @@ export const spectatorAPI = {
     const updated = [...existing, commentObj].slice(-100);
     saveLocalComments(updated);
 
-    // Cross-tab broadcast for instant local sync
     try {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('sag_chat_channel');
@@ -597,13 +675,21 @@ export const spectatorAPI = {
 
     if (isSupabaseConfigured) {
       try {
-        await supabase.from('spectator_comments').insert({
+        const { error } = await supabase.from('spectator_comments').insert({
           author_name: user,
           message: text,
           reaction,
         });
+        if (error) {
+          console.warn('[Supabase] Insert comment retry:', error.message);
+          // Fallback if reaction column not present
+          await supabase.from('spectator_comments').insert({
+            author_name: user,
+            message: `${reaction} ${text}`,
+          });
+        }
       } catch (err) {
-        console.warn('Supabase comment insert:', err);
+        console.warn('Supabase comment insert exception:', err);
       }
     }
 
