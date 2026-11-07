@@ -77,7 +77,13 @@ export function AuctionProvider({ children }) {
     socket.on('auction:unsold', onUnsold);
     socket.on('auction:countdown', onCountdown);
 
+    // Polling fallback to keep auction state fresh in serverless environments
+    const pollTimer = setInterval(() => {
+      fetchState();
+    }, 3000);
+
     return () => {
+      clearInterval(pollTimer);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('auction:state', onStateUpdate);

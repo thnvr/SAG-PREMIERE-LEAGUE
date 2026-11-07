@@ -81,11 +81,38 @@ app.get('/api/health', (req, res) => {
 // Setup Socket.io event handlers
 setupSocketIO(io);
 
+// Lazy DB initialization guard for serverless environments (Vercel)
+let dbInitialized = false;
+let dbInitPromise = null;
+
+async function ensureDbReady() {
+  if (dbInitialized) return;
+  if (!dbInitPromise) {
+    dbInitPromise = (async () => {
+      await getDb();
+      await initSchema();
+      dbInitialized = true;
+    })();
+  }
+  return dbInitPromise;
+}
+
+// Middleware ensuring DB is ready before every /api request
+app.use(async (req, res, next) => {
+  try {
+    await ensureDbReady();
+    next();
+  } catch (err) {
+    console.error('[Server] DB init error:', err);
+    res.status(500).json({ error: 'Database initialization failed', message: err.message });
+  }
+});
+
 // Server startup
 async function startServer() {
   try {
     console.log('[Server] Initializing database...');
-    await initSchema();
+    await ensureDbReady();
     console.log('[Server] Database initialized.');
 
     server.listen(PORT, () => {
@@ -101,4 +128,12 @@ async function startServer() {
   }
 }
 
-startServer();
+// If run directly with `node server/index.js`, start listening on port
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
+module.exports.app = app;
+module.exports.server = server;
+module.exports.startServer = startServer;

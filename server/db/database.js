@@ -8,7 +8,9 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '../../data/sag_premiere.db');
+const isVercel = Boolean(process.env.VERCEL);
+const defaultDbPath = path.join(__dirname, '../../data/sag_premiere.db');
+const DB_PATH = isVercel ? path.join('/tmp', 'sag_premiere.db') : defaultDbPath;
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 let db = null;
@@ -23,6 +25,18 @@ async function getDb() {
 
   SQL = await initSqlJs();
 
+  // If in Vercel, copy bundled DB to writable /tmp on cold start
+  if (isVercel && !fs.existsSync(DB_PATH)) {
+    try {
+      if (fs.existsSync(defaultDbPath)) {
+        fs.copyFileSync(defaultDbPath, DB_PATH);
+        console.log('[DB] Copied bundled database to /tmp');
+      }
+    } catch (copyErr) {
+      console.warn('[DB] Could not copy DB to /tmp:', copyErr.message);
+    }
+  }
+
   // Ensure data directory exists
   const dataDir = path.dirname(DB_PATH);
   if (!fs.existsSync(dataDir)) {
@@ -35,6 +49,10 @@ async function getDb() {
       const buffer = fs.readFileSync(DB_PATH);
       db = new SQL.Database(buffer);
       console.log('[DB] Loaded existing database from', DB_PATH);
+    } else if (fs.existsSync(defaultDbPath)) {
+      const buffer = fs.readFileSync(defaultDbPath);
+      db = new SQL.Database(buffer);
+      console.log('[DB] Loaded fallback database from', defaultDbPath);
     } else {
       db = new SQL.Database();
       console.log('[DB] Created new database');
@@ -67,8 +85,7 @@ function saveDb() {
     }
     fs.writeFileSync(DB_PATH, buffer);
   } catch (err) {
-    console.error('[DB] Error saving database:', err.message);
-    throw err;
+    console.warn('[DB] Warning saving database file:', err.message);
   }
 }
 
