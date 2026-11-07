@@ -1,3 +1,5 @@
+// In production (Vercel), API calls go to Render backend via Vercel rewrites (/api -> Render).
+// In development, Vite proxies /api -> localhost:3001.
 const API_BASE = '/api';
 
 export function formatMoney(paise) {

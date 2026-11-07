@@ -3,6 +3,12 @@ import { io } from 'socket.io-client';
 let socket = null;
 let socketToken = null;
 
+// In production, WebSocket connects directly to the Render backend.
+// In development, Vite proxies /socket.io -> localhost:3001.
+const SOCKET_URL = import.meta.env.PROD
+  ? 'https://sag-premiere-backend.onrender.com'
+  : '/';
+
 /**
  * Initialize socket connection with auth token
  */
@@ -18,7 +24,7 @@ export function connectSocket(token) {
 
   socketToken = nextToken;
 
-  socket = io('/', {
+  socket = io(SOCKET_URL, {
     auth: nextToken ? { token: nextToken } : {},
     transports: ['polling', 'websocket'],
     reconnection: true,
