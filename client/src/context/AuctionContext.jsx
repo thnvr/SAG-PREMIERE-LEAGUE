@@ -5,6 +5,12 @@
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { isFirebaseConfigured } from '../lib/firebase';
+import {
+  pushPlayerToAuction,
+  updateLiveAuctionState,
+  subscribeLiveAuction,
+} from '../services/firebaseAuction';
 import { auctionAPI, teamsAPI, playersAPI } from '../services/api';
 import { useAuth } from './AuthContext';
 
@@ -170,8 +176,51 @@ export function AuctionProvider({ children }) {
       }
     }
 
+    // Firebase Firestore Real-Time Listener (sub-second sync across all devices)
+    let unsubFirebase = () => {};
+    if (isFirebaseConfigured) {
+      try {
+        unsubFirebase = subscribeLiveAuction((liveData) => {
+          if (!liveData) return;
+
+          if (liveData.currentPlayer) {
+            setCurrentPlayer(liveData.currentPlayer);
+          } else if (liveData.status === 'sold' || liveData.currentPlayer === null) {
+            setCurrentPlayer(null);
+          }
+
+          if (liveData.currentBid !== undefined) {
+            setSession((prev) => ({
+              ...prev,
+              current_bid: liveData.currentBid,
+              current_highest_bid: liveData.currentBid,
+              leading_team_id: liveData.leadingTeamId || prev.leading_team_id,
+              status: liveData.status || prev.status,
+              bidding_status: liveData.status || prev.bidding_status,
+            }));
+          }
+
+          if (liveData.leadingTeamId) {
+            setTeams((curr) => {
+              const found = curr.find((t) => t.id === liveData.leadingTeamId);
+              if (found) setLeadingTeam(found);
+              return curr;
+            });
+          }
+
+          if (liveData.lastSold) {
+            setSoldAnimation(liveData.lastSold);
+            setTimeout(() => setSoldAnimation(null), 7000);
+          }
+        });
+      } catch (err) {
+        console.warn('Firebase subscribe error:', err);
+      }
+    }
+
     return () => {
       clearInterval(pollInterval);
+      unsubFirebase();
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -217,7 +266,17 @@ export function AuctionProvider({ children }) {
     setSession(sessionUpdate);
     setCountdown(30);
 
-    // 4. Notify all other tabs & clients
+    // 4. Instant Real-Time Push to Cloud Firestore for Phones, Laptop, Spectators
+    try {
+      await pushPlayerToAuction(nominatedPlayerObj, {
+        currentBid: basePrice,
+        highestBidder: 'None',
+        leadingTeamId: null,
+        status: 'active',
+      });
+    } catch {}
+
+    // 5. Notify all other tabs & clients
     notifyBroadcast('AUCTION_STATE_UPDATE');
     await fetchState();
     return sessionUpdate;
@@ -246,6 +305,16 @@ export function AuctionProvider({ children }) {
 
     await auctionAPI.upsertSession(sessionUpdate);
     await auctionAPI.placeBid(curPId, teamId, amount);
+
+    // Instant Firestore sync to all phones and spectator screens
+    try {
+      await updateLiveAuctionState({
+        currentBid: amount,
+        highestBidder: team?.name || 'Leading Team',
+        leadingTeamId: teamId,
+        status: 'active',
+      });
+    } catch {}
 
     // Reset countdown timer on valid bid
     setCountdown(20);
@@ -308,6 +377,19 @@ export function AuctionProvider({ children }) {
       team: winningTeam || leadingTeam,
       amount,
     };
+
+    // Instant Firestore sync for sold announcement
+    try {
+      await updateLiveAuctionState({
+        currentPlayer: null,
+        currentBid: 0,
+        highestBidder: 'None',
+        leadingTeamId: null,
+        status: 'sold',
+        lastSold: salePayload,
+      });
+    } catch {}
+
     setSoldAnimation(salePayload);
     notifyBroadcast('SOLD_ANIMATION', salePayload);
     setTimeout(() => setSoldAnimation(null), 7000);

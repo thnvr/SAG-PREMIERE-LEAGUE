@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // Expose VITE_, NEXT_PUBLIC_, and SUPABASE_ prefixed environment variables
-  envPrefix: ['VITE_', 'NEXT_PUBLIC_', 'SUPABASE_'],
+  // Expose VITE_, NEXT_PUBLIC_, SUPABASE_, and FIREBASE_ prefixed environment variables
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_', 'SUPABASE_', 'FIREBASE_'],
   server: {
     port: 5173,
     proxy: {
