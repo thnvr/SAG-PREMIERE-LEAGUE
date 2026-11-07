@@ -4,10 +4,6 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
       "source": "/((?!api|uploads).*)",
       "destination": "/index.html"
     }
