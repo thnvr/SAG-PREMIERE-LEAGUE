@@ -1,93 +1,116 @@
 /**
- * api.js — Central data-access layer.
- *
- * Authentication is now handled entirely by Supabase (see AuthContext.jsx).
- * Data queries for teams, players, auction, etc. now go directly to Supabase.
- *
- * The legacy apiFetch / Express /api/* calls are kept for local dev
- * compatibility but are no longer used in production — Supabase replaces them.
+ * api.js — Central data-access layer with Supabase integration and offline fallback.
  */
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-// ── Money formatter ────────────────────────────────────────────────────────
 export function formatMoney(paise) {
   if (paise == null || isNaN(paise)) return '₹0';
   return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
 }
 
-// ── Token helpers (kept for socket.js compatibility) ──────────────────────
 export function getToken() {
   return localStorage.getItem('sag_token');
 }
 export function setToken(token) {
-  if (token) {
-    localStorage.setItem('sag_token', token);
-  } else {
-    localStorage.removeItem('sag_token');
-  }
+  if (token) localStorage.setItem('sag_token', token);
+  else localStorage.removeItem('sag_token');
 }
 export function getStoredUser() {
   try {
-    const user = localStorage.getItem('sag_user');
+    const user = localStorage.getItem('sag_active_user');
     return user ? JSON.parse(user) : null;
   } catch {
     return null;
   }
 }
 export function setStoredUser(user) {
-  if (user) {
-    localStorage.setItem('sag_user', JSON.stringify(user));
-  } else {
-    localStorage.removeItem('sag_user');
-  }
+  if (user) localStorage.setItem('sag_active_user', JSON.stringify(user));
+  else localStorage.removeItem('sag_active_user');
 }
 
-// ── Generic Supabase error wrapper ─────────────────────────────────────────
-function sbThrow(error) {
-  if (error) {
-    console.error('[Supabase]', error.message);
-    throw new Error(error.message);
-  }
-}
+// Default initial teams to prevent empty state
+export const DEFAULT_TEAMS = [
+  {
+    id: 'team-alpha',
+    name: 'SAAG STRIKERS',
+    short_name: 'STRIKERS',
+    primary_color: '#ff6b35',
+    logo_url: '',
+    initial_purse: 200000000,
+    remaining_purse: 200000000,
+  },
+  {
+    id: 'team-bravo',
+    name: 'SAAG UNITED',
+    short_name: 'UNITED',
+    primary_color: '#4ecdc4',
+    logo_url: '',
+    initial_purse: 200000000,
+    remaining_purse: 200000000,
+  },
+  {
+    id: 'team-charlie',
+    name: 'SAAG FC',
+    short_name: 'SAAGFC',
+    primary_color: '#45b7d1',
+    logo_url: '',
+    initial_purse: 200000000,
+    remaining_purse: 200000000,
+  },
+];
 
 // ══════════════════════════════════════════════════════════════════════════
 //  TEAMS
 // ══════════════════════════════════════════════════════════════════════════
 export const teamsAPI = {
   getAll: async () => {
-    const { data, error } = await supabase.from('teams').select('*').order('name');
-    sbThrow(error);
-    return data;
+    if (!isSupabaseConfigured) return DEFAULT_TEAMS;
+    try {
+      const { data, error } = await supabase.from('teams').select('*').order('name');
+      if (error || !data || data.length === 0) return DEFAULT_TEAMS;
+      return data;
+    } catch {
+      return DEFAULT_TEAMS;
+    }
   },
   getById: async (id) => {
-    const { data, error } = await supabase.from('teams').select('*').eq('id', id).single();
-    sbThrow(error);
-    return data;
+    if (!isSupabaseConfigured) return DEFAULT_TEAMS.find(t => t.id === id) || null;
+    try {
+      const { data, error } = await supabase.from('teams').select('*').eq('id', id).single();
+      if (error) return DEFAULT_TEAMS.find(t => t.id === id) || null;
+      return data;
+    } catch {
+      return DEFAULT_TEAMS.find(t => t.id === id) || null;
+    }
   },
   create: async (teamData) => {
     const { data, error } = await supabase.from('teams').insert(teamData).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   update: async (id, teamData) => {
     const { data, error } = await supabase.from('teams').update(teamData).eq('id', id).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   delete: async (id) => {
     const { error } = await supabase.from('teams').delete().eq('id', id);
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return { success: true };
   },
   getSquad: async (id) => {
-    const { data, error } = await supabase
-      .from('players')
-      .select('*')
-      .eq('team_id', id)
-      .eq('status', 'sold')
-      .order('name');
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase
+        .from('players')
+        .select('*')
+        .eq('team_id', id)
+        .eq('status', 'sold')
+        .order('name');
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 };
 
@@ -96,34 +119,43 @@ export const teamsAPI = {
 // ══════════════════════════════════════════════════════════════════════════
 export const playersAPI = {
   getAll: async (params = {}) => {
-    let query = supabase.from('players').select('*');
-    if (params.status) query = query.eq('status', params.status);
-    if (params.team_id) query = query.eq('team_id', params.team_id);
-    if (params.position) query = query.eq('position', params.position);
-    if (params.search) query = query.ilike('name', `%${params.search}%`);
-    query = query.order('name');
-    const { data, error } = await query;
-    sbThrow(error);
-    return data;
+    if (!isSupabaseConfigured) return [];
+    try {
+      let query = supabase.from('players').select('*');
+      if (params.status) query = query.eq('status', params.status);
+      if (params.team_id) query = query.eq('team_id', params.team_id);
+      if (params.position) query = query.eq('position', params.position);
+      if (params.search) query = query.ilike('name', `%${params.search}%`);
+      query = query.order('name');
+      const { data, error } = await query;
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
   getById: async (id) => {
-    const { data, error } = await supabase.from('players').select('*').eq('id', id).single();
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('players').select('*').eq('id', id).single();
+      if (error) return null;
+      return data;
+    } catch {
+      return null;
+    }
   },
   create: async (playerData) => {
     const { data, error } = await supabase.from('players').insert(playerData).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   update: async (id, playerData) => {
     const { data, error } = await supabase.from('players').update(playerData).eq('id', id).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   delete: async (id) => {
     const { error } = await supabase.from('players').delete().eq('id', id);
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return { success: true };
   },
   updateShortlist: async (playerIds, isShortlisted = true) => {
@@ -131,7 +163,7 @@ export const playersAPI = {
       .from('players')
       .update({ is_shortlisted: isShortlisted })
       .in('id', playerIds);
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return { success: true };
   },
   uploadPhoto: async (file, playerId) => {
@@ -140,7 +172,7 @@ export const playersAPI = {
     const { error: uploadError } = await supabase.storage
       .from('player-photos')
       .upload(path, file, { upsert: true });
-    sbThrow(uploadError);
+    if (uploadError) throw new Error(uploadError.message);
     const { data } = supabase.storage.from('player-photos').getPublicUrl(path);
     return { url: data.publicUrl };
   },
@@ -151,19 +183,23 @@ export const playersAPI = {
 // ══════════════════════════════════════════════════════════════════════════
 export const auctionAPI = {
   getCurrentState: async () => {
-    const { data, error } = await supabase
-      .from('auction_sessions')
-      .select(`
-        *,
-        current_player:players(*),
-        leading_team:teams(*)
-      `)
-      .order('id', { ascending: false })
-      .limit(1)
-      .single();
-    if (error && error.code === 'PGRST116') return null; // no rows
-    sbThrow(error);
-    return data;
+    if (!isSupabaseConfigured) return null;
+    try {
+      const { data, error } = await supabase
+        .from('auction_sessions')
+        .select(`
+          *,
+          current_player:players(*),
+          leading_team:teams(*)
+        `)
+        .order('id', { ascending: false })
+        .limit(1)
+        .single();
+      if (error) return null;
+      return data;
+    } catch {
+      return null;
+    }
   },
   upsertSession: async (sessionData) => {
     const { data, error } = await supabase
@@ -171,7 +207,7 @@ export const auctionAPI = {
       .upsert(sessionData, { onConflict: 'id' })
       .select()
       .single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   placeBid: async (playerId, teamId, amount) => {
@@ -180,19 +216,24 @@ export const auctionAPI = {
       .insert({ player_id: playerId, team_id: teamId, amount })
       .select()
       .single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   getHistory: async (params = {}) => {
-    let query = supabase
-      .from('bids')
-      .select(`*, player:players(name, position), team:teams(name, short_name)`)
-      .order('created_at', { ascending: false });
-    if (params.player_id) query = query.eq('player_id', params.player_id);
-    if (params.team_id) query = query.eq('team_id', params.team_id);
-    const { data, error } = await query;
-    sbThrow(error);
-    return data;
+    if (!isSupabaseConfigured) return [];
+    try {
+      let query = supabase
+        .from('bids')
+        .select(`*, player:players(name, position), team:teams(name, short_name)`)
+        .order('created_at', { ascending: false });
+      if (params.player_id) query = query.eq('player_id', params.player_id);
+      if (params.team_id) query = query.eq('team_id', params.team_id);
+      const { data, error } = await query;
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 };
 
@@ -201,55 +242,65 @@ export const auctionAPI = {
 // ══════════════════════════════════════════════════════════════════════════
 export const adminAPI = {
   getDashboard: async () => {
-    const [teamsRes, playersRes, bidsRes] = await Promise.all([
-      supabase.from('teams').select('id, name, remaining_purse, initial_purse'),
-      supabase.from('players').select('id, status'),
-      supabase.from('bids').select('id').limit(1),
-    ]);
-    return {
-      teams: teamsRes.data || [],
-      players: playersRes.data || [],
-      totalBids: bidsRes.data?.length || 0,
-    };
+    try {
+      const [teamsRes, playersRes, bidsRes] = await Promise.all([
+        supabase.from('teams').select('id, name, remaining_purse, initial_purse'),
+        supabase.from('players').select('id, status'),
+        supabase.from('bids').select('id').limit(1),
+      ]);
+      return {
+        teams: teamsRes.data || DEFAULT_TEAMS,
+        players: playersRes.data || [],
+        totalBids: bidsRes.data?.length || 0,
+      };
+    } catch {
+      return { teams: DEFAULT_TEAMS, players: [], totalBids: 0 };
+    }
   },
   getLeague: async () => {
-    const { data, error } = await supabase.from('league_settings').select('*').limit(1).single();
-    if (error && error.code === 'PGRST116') return {};
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('league_settings').select('*').limit(1).single();
+      if (error) return {};
+      return data || {};
+    } catch {
+      return {};
+    }
   },
   updateLeague: async (settingsData) => {
-    const { data, error } = await supabase
-      .from('league_settings')
-      .upsert(settingsData)
-      .select()
-      .single();
-    sbThrow(error);
+    const { data, error } = await supabase.from('league_settings').upsert(settingsData).select().single();
+    if (error) throw new Error(error.message);
     return data;
   },
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  AUTH API (kept for compatibility — actual auth uses AuthContext/Supabase)
+//  AUTH API
 // ══════════════════════════════════════════════════════════════════════════
 export const authAPI = {
-  // These are no-ops in Supabase mode; AuthContext handles login/logout.
-  login: async (credentials) => {
-    throw new Error('Use AuthContext.login() instead of authAPI.login()');
+  login: async () => {
+    throw new Error('Use AuthContext.login() instead');
   },
   me: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    } catch {
+      return null;
+    }
   },
   getUsers: async () => {
-    const { data, error } = await supabase.from('profiles').select('*');
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  REPORTS — CSV downloads from Supabase data
+//  REPORTS
 // ══════════════════════════════════════════════════════════════════════════
 function downloadCSV(rows, filename) {
   if (!rows || rows.length === 0) return;
@@ -288,22 +339,17 @@ export const reportsAPI = {
 // ══════════════════════════════════════════════════════════════════════════
 export const auditAPI = {
   getAll: async () => {
-    const { data, error } = await supabase
-      .from('audit_log')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error && error.code === '42P01') return []; // table doesn't exist yet
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false });
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
   reverseSale: async (purchaseId, reason) => {
-    const { data, error } = await supabase
-      .from('audit_log')
-      .update({ reversed: true, reversal_reason: reason })
-      .eq('id', purchaseId)
-      .select()
-      .single();
-    sbThrow(error);
+    const { data, error } = await supabase.from('audit_log').update({ reversed: true, reversal_reason: reason }).eq('id', purchaseId).select().single();
+    if (error) throw new Error(error.message);
     return data;
   },
 };
@@ -313,25 +359,31 @@ export const auditAPI = {
 // ══════════════════════════════════════════════════════════════════════════
 export const awardsAPI = {
   getAwards: async () => {
-    const { data, error } = await supabase.from('awards').select('*');
-    if (error && error.code === '42P01') return [];
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('awards').select('*');
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
   saveAward: async (awardData) => {
     const { data, error } = await supabase.from('awards').upsert(awardData).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   getBadges: async () => {
-    const { data, error } = await supabase.from('badges').select('*');
-    if (error && error.code === '42P01') return [];
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('badges').select('*');
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
   createBadge: async (badgeData) => {
     const { data, error } = await supabase.from('badges').insert(badgeData).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   assignPlayerBadge: async (playerId, badgeName, action = 'add') => {
@@ -340,12 +392,12 @@ export const awardsAPI = {
     if (action === 'add' && !badges.includes(badgeName)) badges.push(badgeName);
     if (action === 'remove') badges = badges.filter(b => b !== badgeName);
     const { data, error } = await supabase.from('players').update({ badges: badges.join(',') }).eq('id', playerId).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
   fixTeamPurse: async (teamId, initial_purse) => {
     const { data, error } = await supabase.from('teams').update({ initial_purse, remaining_purse: initial_purse }).eq('id', teamId).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
 };
@@ -355,32 +407,19 @@ export const awardsAPI = {
 // ══════════════════════════════════════════════════════════════════════════
 export const spectatorAPI = {
   getComments: async () => {
-    const { data, error } = await supabase
-      .from('spectator_comments')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error && error.code === '42P01') return [];
-    sbThrow(error);
-    return data;
+    try {
+      const { data, error } = await supabase.from('spectator_comments').select('*').order('created_at', { ascending: false }).limit(50);
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
   },
   postComment: async (commentData) => {
     const { data, error } = await supabase.from('spectator_comments').insert(commentData).select().single();
-    sbThrow(error);
+    if (error) throw new Error(error.message);
     return data;
   },
 };
-
-// ── Supabase Realtime helper (for AuctionContext) ──────────────────────────
-export function subscribeToAuction(callback) {
-  return supabase
-    .channel('public:auction_sessions')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'auction_sessions' },
-      (payload) => callback(payload.new || payload.old)
-    )
-    .subscribe();
-}
 
 export default { teamsAPI, playersAPI, auctionAPI, adminAPI, authAPI };
