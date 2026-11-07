@@ -3,6 +3,7 @@ node_modules/
 client/node_modules/
 
 # Production build
+dist/
 client/dist/
 
 # Environment files

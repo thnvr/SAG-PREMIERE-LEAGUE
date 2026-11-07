@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "node build.cjs",
+  "rewrites": [
+    {
+      "source": "/((?!api|uploads).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
