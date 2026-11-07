@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAuction } from '../context/AuctionContext';
+import ConnectionIndicator from './ConnectionIndicator';
 import {
   Trophy,
   LayoutDashboard,
@@ -115,11 +116,8 @@ export default function Layout({ children }) {
 
           {/* Right Status / Auth — responsive */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            {/* Live Indicator */}
-            <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md bg-[#18191f] border border-[#282a35] text-[10px] font-mono">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${connected ? 'bg-[#ffd000] animate-pulse shadow-[0_0_6px_#ffd000]' : 'bg-rose-500'}`} />
-              <span className="text-white font-bold hidden sm:inline whitespace-nowrap">{connected ? 'ARENA LIVE' : 'OFFLINE'}</span>
-            </div>
+            {/* Cloud Sync Diagnostic & Status Indicator */}
+            <ConnectionIndicator />
 
             {isAuthenticated ? (
               <div className="flex items-center gap-1.5 sm:gap-2">

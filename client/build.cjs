@@ -10,7 +10,7 @@ const isRoot = fs.existsSync(path.join(process.cwd(), 'client/package.json'));
 if (isRoot) {
   console.log('[Build] Detected root directory. Building client...');
   const clientDir = path.join(process.cwd(), 'client');
-  execSync('npm run build', { cwd: clientDir, stdio: 'inherit' });
+  execSync('npm run build', { cwd: clientDir, stdio: 'inherit', env: process.env });
 
   // Mirror client/dist to root/dist
   const src = path.join(process.cwd(), 'client/dist');
@@ -25,7 +25,7 @@ if (isRoot) {
   }
 } else {
   console.log('[Build] Detected client directory. Building directly...');
-  execSync('npm run build', { stdio: 'inherit' });
+  execSync('npm run build', { stdio: 'inherit', env: process.env });
 }
 
 console.log('[Build] Build completed successfully!');
