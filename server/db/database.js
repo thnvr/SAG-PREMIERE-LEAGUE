@@ -4,12 +4,27 @@
  * All monetary values stored as integers (paise - 1/100 of rupee)
  */
 
-const initSqlJs = require('sql.js');
+const initSqlJs = require('sql.js/dist/sql-wasm-inline.js');
 const fs = require('fs');
 const path = require('path');
 
 const isVercel = Boolean(process.env.VERCEL);
-const defaultDbPath = path.join(__dirname, '../../data/sag_premiere.db');
+
+function findDbFile() {
+  const candidates = [
+    path.join(__dirname, '../../data/sag_premiere.db'),
+    path.join(process.cwd(), 'data/sag_premiere.db'),
+    path.join(__dirname, '../data/sag_premiere.db'),
+    path.join(__dirname, 'sag_premiere.db'),
+    path.join(process.cwd(), 'sag_premiere.db')
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return path.join(process.cwd(), 'data/sag_premiere.db');
+}
+
+const defaultDbPath = findDbFile();
 const DB_PATH = isVercel ? path.join('/tmp', 'sag_premiere.db') : defaultDbPath;
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
@@ -25,12 +40,14 @@ async function getDb() {
 
   SQL = await initSqlJs();
 
+  const sourceDb = findDbFile();
+
   // If in Vercel, copy bundled DB to writable /tmp on cold start
   if (isVercel && !fs.existsSync(DB_PATH)) {
     try {
-      if (fs.existsSync(defaultDbPath)) {
-        fs.copyFileSync(defaultDbPath, DB_PATH);
-        console.log('[DB] Copied bundled database to /tmp');
+      if (fs.existsSync(sourceDb)) {
+        fs.copyFileSync(sourceDb, DB_PATH);
+        console.log('[DB] Copied bundled database from', sourceDb, 'to /tmp');
       }
     } catch (copyErr) {
       console.warn('[DB] Could not copy DB to /tmp:', copyErr.message);
@@ -40,7 +57,11 @@ async function getDb() {
   // Ensure data directory exists
   const dataDir = path.dirname(DB_PATH);
   if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+    } catch (e) {
+      console.warn('[DB] mkdir warning:', e.message);
+    }
   }
 
   // Load existing database or create new one
@@ -48,14 +69,14 @@ async function getDb() {
     if (fs.existsSync(DB_PATH)) {
       const buffer = fs.readFileSync(DB_PATH);
       db = new SQL.Database(buffer);
-      console.log('[DB] Loaded existing database from', DB_PATH);
-    } else if (fs.existsSync(defaultDbPath)) {
-      const buffer = fs.readFileSync(defaultDbPath);
+      console.log('[DB] Loaded database from', DB_PATH);
+    } else if (fs.existsSync(sourceDb)) {
+      const buffer = fs.readFileSync(sourceDb);
       db = new SQL.Database(buffer);
-      console.log('[DB] Loaded fallback database from', defaultDbPath);
+      console.log('[DB] Loaded fallback database from', sourceDb);
     } else {
       db = new SQL.Database();
-      console.log('[DB] Created new database');
+      console.log('[DB] Created new in-memory database');
     }
   } catch (err) {
     console.warn('[DB] Error loading database, creating new one:', err.message);
@@ -170,20 +191,47 @@ function transaction(fn) {
  */
 async function initSchema() {
   await getDb();
-  const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
-  db.exec(schema);
 
-  const playerColumns = new Set(all('PRAGMA table_info(players)').map(({ name }) => name));
-  const photoAdjustmentColumns = [
-    ['photo_scale', 'REAL NOT NULL DEFAULT 1'],
-    ['photo_x', 'REAL NOT NULL DEFAULT 0'],
-    ['photo_y', 'REAL NOT NULL DEFAULT 0']
-  ];
-  photoAdjustmentColumns.forEach(([name, definition]) => {
-    if (!playerColumns.has(name)) {
-      db.run(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
+  // If database already has tables (from bundled sqlite file), skip executing schema.sql
+  try {
+    const existingUsers = all("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+    if (existingUsers.length === 0) {
+      const candidates = [
+        SCHEMA_PATH,
+        path.join(process.cwd(), 'server/db/schema.sql'),
+        path.join(__dirname, 'schema.sql'),
+        path.join(__dirname, '../db/schema.sql')
+      ];
+      let schema = null;
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          schema = fs.readFileSync(p, 'utf-8');
+          break;
+        }
+      }
+      if (schema) {
+        db.exec(schema);
+      }
     }
-  });
+  } catch (schemaErr) {
+    console.warn('[DB] Schema init check:', schemaErr.message);
+  }
+
+  try {
+    const playerColumns = new Set(all('PRAGMA table_info(players)').map(({ name }) => name));
+    const photoAdjustmentColumns = [
+      ['photo_scale', 'REAL NOT NULL DEFAULT 1'],
+      ['photo_x', 'REAL NOT NULL DEFAULT 0'],
+      ['photo_y', 'REAL NOT NULL DEFAULT 0']
+    ];
+    photoAdjustmentColumns.forEach(([name, definition]) => {
+      if (!playerColumns.has(name)) {
+        db.run(`ALTER TABLE players ADD COLUMN ${name} ${definition}`);
+      }
+    });
+  } catch (colErr) {
+    console.warn('[DB] Column check warning:', colErr.message);
+  }
 
   saveDb();
   console.log('[DB] Schema initialized successfully');
