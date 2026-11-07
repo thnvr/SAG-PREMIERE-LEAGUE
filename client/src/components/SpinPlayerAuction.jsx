@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { playersAPI, auctionAPI, formatMoney } from '../services/api';
+import { useAuction } from '../context/AuctionContext';
 import {
   RotateCw,
   Zap,
@@ -37,6 +38,7 @@ const POSITION_BUCKETS = {
 const BUCKET_ORDER = ['Attackers', 'Midfielders', 'Defenders', 'Goalkeepers'];
 
 export default function SpinPlayerAuction({ onNominated }) {
+  const { nominatePlayer } = useAuction();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -226,7 +228,7 @@ export default function SpinPlayerAuction({ onNominated }) {
     setNominateLoading(true);
     setError(null);
     try {
-      await auctionAPI.nominate(selectedWinner.id, {
+      await nominatePlayer(selectedWinner.id, {
         name: selectedWinner.name,
         base_price: selectedWinner.base_price,
         primary_position: selectedWinner.primary_position

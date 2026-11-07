@@ -72,13 +72,18 @@ export default function CaptainsDashboard() {
   };
 
   useEffect(() => {
-    spectatorAPI.getComments()
-      .then((res) => {
-        if (res?.comments && Array.isArray(res.comments)) {
-          mergeComments(res.comments);
-        }
-      })
-      .catch(() => {});
+    const loadComments = () => {
+      spectatorAPI.getComments()
+        .then((res) => {
+          if (res?.comments && Array.isArray(res.comments)) {
+            mergeComments(res.comments);
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadComments();
+    const pollTimer = setInterval(loadComments, 2000);
 
     const socket = connectSocket(getToken());
     chatSocketRef.current = socket;
@@ -92,7 +97,6 @@ export default function CaptainsDashboard() {
     };
 
     const onDoublePriceAlert = (data) => {
-      // Show if all captains or if captain's team is in biddingTeamIds
       if (!data.biddingTeamIds || data.biddingTeamIds.length === 0 || data.biddingTeamIds.includes(activeCaptainTeamId)) {
         setDoublePriceAlertNotification(data);
       }
@@ -105,6 +109,7 @@ export default function CaptainsDashboard() {
     socket.emit('spectator:chat:sync');
 
     return () => {
+      clearInterval(pollTimer);
       socket.off('spectator:chat:history', onHistory);
       socket.off('spectator:chat:message', onMessage);
       socket.off('auction:tax-alert', onTaxAlert);

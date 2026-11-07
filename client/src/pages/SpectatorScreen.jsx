@@ -3,6 +3,7 @@ import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { getToken, formatMoney, spectatorAPI } from '../services/api';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import PlayerCard from '../components/PlayerCard';
 import CountdownTimer from '../components/CountdownTimer';
 import SoldBanner from '../components/SoldBanner';
@@ -63,30 +64,64 @@ export default function SpectatorScreen() {
   };
 
   useEffect(() => {
-    // 1. Immediately load full persistent chat history from DB via REST API
-    spectatorAPI.getComments()
-      .then((res) => {
-        if (res?.comments && Array.isArray(res.comments)) {
-          mergeComments(res.comments);
-        }
-      })
-      .catch((err) => console.warn('Could not load spectator comments via REST:', err));
+    // 1. Immediately load comments from API / DB
+    const loadComments = () => {
+      spectatorAPI.getComments()
+        .then((res) => {
+          if (res?.comments && Array.isArray(res.comments)) {
+            mergeComments(res.comments);
+          }
+        })
+        .catch(() => {});
+    };
 
-    // 2. Connect to real-time socket for live broadcasts
-    const socket = connectSocket(getToken());
-    chatSocketRef.current = socket;
+    loadComments();
 
-    const onHistory = (messages) => mergeComments(messages);
-    const onMessage = (message) => mergeComments(message);
+    // 2. Continuous 2-second polling ensures all new viewers & cross-logins see new comments immediately
+    const pollTimer = setInterval(loadComments, 2000);
 
-    socket.on('spectator:chat:history', onHistory);
-    socket.on('spectator:chat:message', onMessage);
-    socket.emit('spectator:chat:sync');
+    // 3. Cross-tab BroadcastChannel for instantaneous sync across browser windows
+    let bc = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('sag_chat_channel');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'NEW_COMMENT' && event.data?.payload) {
+            mergeComments(event.data.payload);
+          }
+        };
+      }
+    } catch {}
+
+    // 4. Supabase Realtime channel for live internet broadcasts
+    let channel = null;
+    if (isSupabaseConfigured) {
+      try {
+        channel = supabase
+          .channel('spectator-chat-live')
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'spectator_comments' },
+            (payload) => {
+              if (payload.new) {
+                mergeComments({
+                  id: payload.new.id,
+                  user: payload.new.author_name,
+                  text: payload.new.message,
+                  reaction: payload.new.reaction || '🔥',
+                  time: payload.new.created_at,
+                });
+              }
+            }
+          )
+          .subscribe();
+      } catch {}
+    }
 
     return () => {
-      socket.off('spectator:chat:history', onHistory);
-      socket.off('spectator:chat:message', onMessage);
-      chatSocketRef.current = null;
+      clearInterval(pollTimer);
+      if (bc) bc.close();
+      if (channel) supabase.removeChannel(channel);
     };
   }, [user?.id]);
 
@@ -102,37 +137,18 @@ export default function SpectatorScreen() {
     const sender = user?.displayName || user?.username || 'Spectator';
 
     setChatError('');
-    const socket = chatSocketRef.current;
-
-    if (socket && socket.connected) {
-      socket.emit('spectator:chat:send', { text, reaction, user: sender }, (response) => {
-        if (response?.success) {
-          setChatError('');
-          onSuccess?.();
-        } else {
-          // Fallback to REST API
-          spectatorAPI.postComment({ text, reaction, user: sender })
-            .then((res) => {
-              if (res?.comment) mergeComments(res.comment);
-              setChatError('');
-              onSuccess?.();
-            })
-            .catch((err) => setChatError(err.message || 'Unable to send message.'));
-        }
-      });
-    } else {
-      try {
-        const res = await spectatorAPI.postComment({ text, reaction, user: sender });
-        if (res?.comment) mergeComments(res.comment);
-        setChatError('');
-        onSuccess?.();
-      } catch (err) {
-        setChatError(err.message || 'Unable to send message.');
+    try {
+      const res = await spectatorAPI.postComment({ text, reaction, user: sender });
+      if (res?.comment) {
+        mergeComments(res.comment);
       }
+      onSuccess?.();
+    } catch (err) {
+      setChatError(err.message || 'Unable to post message.');
     }
   };
 
-  const toggleFullscreen = () => {
+    const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
     } else {

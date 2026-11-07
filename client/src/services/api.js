@@ -84,6 +84,29 @@ function saveLocalPlayers(players) {
   } catch {}
 }
 
+function getLocalSession() {
+  try {
+    const raw = localStorage.getItem('sag_active_session');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    id: 1,
+    status: 'pre_auction',
+    bidding_status: 'pre_auction',
+    current_player_id: null,
+    current_bid: 0,
+    current_highest_bid: 0,
+    leading_team_id: null,
+    bid_increment: 5000,
+  };
+}
+
+function saveLocalSession(s) {
+  try {
+    localStorage.setItem('sag_active_session', JSON.stringify(s));
+  } catch {}
+}
+
 function getLocalComments() {
   try {
     const raw = localStorage.getItem('sag_spectator_comments');
@@ -380,41 +403,87 @@ export const auctionAPI = {
           .order('id', { ascending: false })
           .limit(1)
           .single();
-        if (!error && data) return data;
+        if (!error && data) {
+          saveLocalSession(data);
+          return data;
+        }
       } catch {}
     }
-    return null;
+    return getLocalSession();
   },
 
   upsertSession: async (sessionData) => {
+    const normalized = {
+      id: 1,
+      ...sessionData,
+      updated_at: new Date().toISOString(),
+    };
+
+    saveLocalSession(normalized);
+
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from('auction_sessions')
-        .upsert(sessionData, { onConflict: 'id' })
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
+      try {
+        const { data, error } = await supabase
+          .from('auction_sessions')
+          .upsert(normalized, { onConflict: 'id' })
+          .select()
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Upsert session error:', err);
+      }
     }
-    return sessionData;
+    return normalized;
+  },
+
+  nominate: async (playerId, overrides = {}) => {
+    const player = await playersAPI.getById(playerId);
+    const basePrice = overrides.base_price || player?.base_price || 50000;
+
+    await playersAPI.update(playerId, {
+      auction_status: 'bidding',
+      status: 'available',
+      base_price: basePrice,
+      ...(overrides.name ? { name: overrides.name } : {}),
+      ...(overrides.primary_position ? { primary_position: overrides.primary_position } : {}),
+    });
+
+    const sessionObj = {
+      id: 1,
+      current_player_id: playerId,
+      current_bid: basePrice,
+      current_highest_bid: basePrice,
+      leading_team_id: null,
+      status: 'active',
+      bidding_status: 'active',
+      bid_increment: 5000,
+      updated_at: new Date().toISOString(),
+    };
+
+    return await auctionAPI.upsertSession(sessionObj);
   },
 
   placeBid: async (playerId, teamId, amount) => {
+    const sessionObj = {
+      id: 1,
+      current_player_id: playerId,
+      current_bid: amount,
+      current_highest_bid: amount,
+      leading_team_id: teamId,
+      status: 'active',
+      bidding_status: 'active',
+      updated_at: new Date().toISOString(),
+    };
+    await auctionAPI.upsertSession(sessionObj);
+
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from('bids')
-        .insert({ player_id: playerId, team_id: teamId, amount })
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
+      try {
+        await supabase.from('bids').insert({ player_id: playerId, team_id: teamId, amount });
+      } catch {}
     }
-    return { player_id: playerId, team_id: teamId, amount, id: Date.now() };
+    return sessionObj;
   },
 
-  nominate: async (playerId) => {
-    return { success: true, playerId };
-  },
   sold: async () => ({ success: true }),
   unsold: async () => ({ success: true }),
   pause: async () => ({ success: true }),
@@ -489,15 +558,15 @@ export const spectatorAPI = {
           .order('created_at', { ascending: true })
           .limit(100);
         if (data && data.length > 0) {
-          return {
-            comments: data.map((d) => ({
-              id: d.id,
-              user: d.author_name,
-              text: d.message,
-              reaction: '🔥',
-              time: d.created_at,
-            })),
-          };
+          const list = data.map((d) => ({
+            id: d.id,
+            user: d.author_name,
+            text: d.message,
+            reaction: d.reaction || '🔥',
+            time: d.created_at,
+          }));
+          saveLocalComments(list);
+          return { comments: list };
         }
       } catch {}
     }
@@ -514,15 +583,28 @@ export const spectatorAPI = {
     };
 
     const existing = getLocalComments();
-    saveLocalComments([...existing, commentObj].slice(-100));
+    const updated = [...existing, commentObj].slice(-100);
+    saveLocalComments(updated);
+
+    // Cross-tab broadcast for instant local sync
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('sag_chat_channel');
+        bc.postMessage({ type: 'NEW_COMMENT', payload: commentObj });
+        bc.close();
+      }
+    } catch {}
 
     if (isSupabaseConfigured) {
       try {
         await supabase.from('spectator_comments').insert({
           author_name: user,
           message: text,
+          reaction,
         });
-      } catch {}
+      } catch (err) {
+        console.warn('Supabase comment insert:', err);
+      }
     }
 
     return { comment: commentObj, success: true };
