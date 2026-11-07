@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { getToken, formatMoney, spectatorAPI } from '../services/api';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadHistoryAndPoll, recordGoogleActivity, WEB_APP_URL } from '../services/googleFeedAPI';
 import PlayerCard from '../components/PlayerCard';
 import CountdownTimer from '../components/CountdownTimer';
 import SoldBanner from '../components/SoldBanner';
@@ -41,6 +42,7 @@ export default function SpectatorScreen() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedTeamView, setSelectedTeamView] = useState(null);
+  const [activeRightTab, setActiveRightTab] = useState('feed'); // 'feed' | 'cheers'
   
   // Interactive Persistent Spectator Encouragement Comments
   const [comments, setComments] = useState([]);
@@ -48,6 +50,25 @@ export default function SpectatorScreen() {
   const [chatError, setChatError] = useState('');
   const chatBottomRef = useRef(null);
   const chatSocketRef = useRef(null);
+
+  // Google Apps Script Live Activity & Broadcast Feed Polling (every 2s)
+  useEffect(() => {
+    // Record current spectator/user session
+    recordGoogleActivity({
+      user: user?.displayName || user?.username || 'Spectator Fan',
+      status: 'Watching Live Auction',
+    });
+
+    // Load past history immediately when page opens
+    loadHistoryAndPoll();
+
+    // Refresh every 2 seconds so new logins appear automatically
+    const pollInterval = setInterval(() => {
+      loadHistoryAndPoll();
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [user?.displayName, user?.username]);
 
   const mergeComments = (incoming) => {
     if (!incoming) return;
@@ -378,84 +399,133 @@ export default function SpectatorScreen() {
         </div>
 
         {/* =========================================================================
-            COLUMN 3 (LG: 3): SPECTATOR CHAT & FAN ENCOURAGEMENT FEED
+            COLUMN 3 (LG: 3): SPECTATOR CHAT & BROADCAST ACTIVITY FEED (GOOGLE SHEET BACKEND)
            ========================================================================= */}
-        <div className="lg:col-span-3 flex flex-col justify-between rounded-2xl bg-[#18191f] border border-[#262833] p-5 h-[520px]">
+        <div className="lg:col-span-3 flex flex-col justify-between rounded-2xl bg-[#18191f] border border-[#262833] p-4 h-[520px]">
           <div>
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#262833]">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-[#ffd000]" />
-                <h3 className="text-xs font-black uppercase text-white tracking-wider">
-                  Spectator Cheer & Reactions
-                </h3>
-              </div>
-              <span className="w-2 h-2 rounded-full bg-[#ffd000] animate-pulse" />
-            </div>
-
-            {/* Quick Emoji Reaction Buttons */}
-            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-[#262833]">
-              <span className="text-[10px] text-[#9ca0b0] font-bold uppercase">Cheer:</span>
-              {['🔥', '👏', '⚡', '⚽', '🏆'].map((emoji) => (
+            {/* Header with Switcher Tabs */}
+            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[#262833]">
+              <div className="flex items-center gap-1.5 p-1 bg-[#111215] rounded-xl border border-[#262833]">
                 <button
-                  key={emoji}
                   type="button"
-                  onClick={() => sendQuickEmoji(emoji)}
-                  className="w-8 h-8 rounded-lg bg-[#111215] hover:bg-[#22242e] border border-[#282a35] flex items-center justify-center text-sm transition hover:scale-110 active:scale-95 cursor-pointer"
+                  onClick={() => setActiveRightTab('feed')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    activeRightTab === 'feed'
+                      ? 'bg-[#ffd000] text-[#0a0b0d] shadow'
+                      : 'text-[#9ca0b0] hover:text-white'
+                  }`}
                 >
-                  {emoji}
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Activity Feed
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setActiveRightTab('cheers')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    activeRightTab === 'cheers'
+                      ? 'bg-[#ffd000] text-[#0a0b0d] shadow'
+                      : 'text-[#9ca0b0] hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Fan Cheers
+                </button>
+              </div>
+              <span className="text-[10px] text-[#ffd000] font-mono font-bold">2s Sync</span>
             </div>
 
-            {/* Comment Stream */}
-            <div className="h-64 overflow-y-auto space-y-2 pr-1">
-              {comments.length === 0 ? (
-                <div className="text-center py-12 text-xs text-[#8b8e99] flex flex-col items-center">
-                  <MessageSquare className="w-6 h-6 text-[#ffd000]/40 mb-2" />
-                  <span>No spectator cheers yet.</span>
-                  <span className="text-[10px] text-[#646774] mt-0.5">Be the first to drop a comment!</span>
-                </div>
-              ) : (
-                comments.map((c) => (
-                  <div key={c.id} className="p-2.5 rounded-xl bg-[#111215] border border-[#22242d] space-y-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="font-bold text-[#ffd000]">{c.user}</span>
-                      <span className="text-[#646774] font-mono">{new Date(c.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <div className="text-xs text-white/90 flex items-center justify-between gap-2">
-                      <span className="break-words">{c.text}</span>
-                      <span className="flex-shrink-0 text-sm">{c.reaction}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={chatBottomRef} />
-            </div>
-          </div>
-
-          {/* Comment Input Box */}
-          <div className="pt-2 border-t border-[#262833]">
-            <div className="text-[10px] text-[#8b8e99] flex items-center justify-between pb-1.5 px-0.5">
-              <span>Chatting as <strong className="text-[#ffd000]">{user?.displayName || user?.username || 'Spectator'}</strong></span>
-              <span className="font-mono text-[9px] text-[#ffd000]">{comments.length} total</span>
-            </div>
-            <form onSubmit={handleSendComment} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                maxLength={300}
-                placeholder="Cheer for your team..."
-                className="flex-1 bg-[#111215] border border-[#262833] rounded-lg px-3.5 py-2 text-xs text-white placeholder-[#646774] focus:outline-none focus:border-[#ffd000]"
-              />
-              <button
-                type="submit"
-                className="w-8 h-8 rounded-lg bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] flex items-center justify-center shadow transition hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
+            {/* TAB 1: Live Broadcast Activity Feed (Google Apps Script Backend) */}
+            <div style={{ display: activeRightTab === 'feed' ? 'block' : 'none' }}>
+              <div className="flex items-center justify-between text-[11px] text-[#8b8e99] mb-2 px-1">
+                <span>Google Sheet Backend Connected</span>
+                <span className="text-emerald-400 font-mono text-[10px]">● Online</span>
+              </div>
+              <div
+                id="broadcast-feed"
+                style={{
+                  background: '#111',
+                  color: '#fff',
+                  padding: '14px',
+                  height: '380px',
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  lineHeight: '1.6',
+                  borderRadius: '12px',
+                  border: '1px solid #262833',
+                }}
               >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
-            {chatError && <p role="status" className="pt-1.5 text-[10px] text-rose-300">{chatError}</p>}
+                Loading previous activity...
+              </div>
+            </div>
+
+            {/* TAB 2: Fan Cheers & Chat Feed */}
+            <div style={{ display: activeRightTab === 'cheers' ? 'block' : 'none' }}>
+              {/* Quick Emoji Reaction Buttons */}
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[#262833]">
+                <span className="text-[10px] text-[#9ca0b0] font-bold uppercase">Cheer:</span>
+                {['🔥', '👏', '⚡', '⚽', '🏆'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => sendQuickEmoji(emoji)}
+                    className="w-8 h-8 rounded-lg bg-[#111215] hover:bg-[#22242e] border border-[#282a35] flex items-center justify-center text-sm transition hover:scale-110 active:scale-95 cursor-pointer"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              {/* Comment Stream */}
+              <div className="h-64 overflow-y-auto space-y-2 pr-1">
+                {comments.length === 0 ? (
+                  <div className="text-center py-12 text-xs text-[#8b8e99] flex flex-col items-center">
+                    <MessageSquare className="w-6 h-6 text-[#ffd000]/40 mb-2" />
+                    <span>No spectator cheers yet.</span>
+                    <span className="text-[10px] text-[#646774] mt-0.5">Be the first to drop a comment!</span>
+                  </div>
+                ) : (
+                  comments.map((c) => (
+                    <div key={c.id} className="p-2.5 rounded-xl bg-[#111215] border border-[#22242d] space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-bold text-[#ffd000]">{c.user}</span>
+                        <span className="text-[#646774] font-mono">{new Date(c.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div className="text-xs text-white/90 flex items-center justify-between gap-2">
+                        <span className="break-words">{c.text}</span>
+                        <span className="flex-shrink-0 text-sm">{c.reaction}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Comment Input Box */}
+              <div className="pt-2 border-t border-[#262833]">
+                <div className="text-[10px] text-[#8b8e99] flex items-center justify-between pb-1.5 px-0.5">
+                  <span>Chatting as <strong className="text-[#ffd000]">{user?.displayName || user?.username || 'Spectator'}</strong></span>
+                  <span className="font-mono text-[9px] text-[#ffd000]">{comments.length} total</span>
+                </div>
+                <form onSubmit={handleSendComment} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    maxLength={300}
+                    placeholder="Cheer for your team..."
+                    className="flex-1 bg-[#111215] border border-[#262833] rounded-lg px-3 py-1.5 text-xs text-white placeholder-[#646774] focus:outline-none focus:border-[#ffd000]"
+                  />
+                  <button
+                    type="submit"
+                    className="w-8 h-8 rounded-lg bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] flex items-center justify-center shadow transition hover:scale-105 active:scale-95 cursor-pointer flex-shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+                {chatError && <p role="status" className="pt-1 text-[10px] text-rose-300">{chatError}</p>}
+              </div>
+            </div>
           </div>
         </div>
 

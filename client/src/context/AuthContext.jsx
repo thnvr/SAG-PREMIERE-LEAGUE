@@ -3,6 +3,7 @@
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { recordGoogleActivity } from '../services/googleFeedAPI';
 
 const AuthContext = createContext(null);
 
@@ -138,6 +139,10 @@ export function AuthProvider({ children }) {
       };
       setUser(spectatorUser);
       saveUser(spectatorUser);
+      recordGoogleActivity({
+        user: spectatorUser.displayName,
+        status: 'Joined Spectator Broadcast',
+      });
       return spectatorUser;
     }
 
@@ -169,6 +174,10 @@ export function AuthProvider({ children }) {
             };
             setUser(loggedIn);
             saveUser(loggedIn);
+            recordGoogleActivity({
+              user: loggedIn.displayName,
+              status: `Logged In (${loggedIn.role})`,
+            });
             return loggedIn;
           }
         }
@@ -189,6 +198,10 @@ export function AuthProvider({ children }) {
       };
       setUser(loggedIn);
       saveUser(loggedIn);
+      recordGoogleActivity({
+        user: loggedIn.displayName,
+        status: `Logged In (${loggedIn.role})`,
+      });
       return loggedIn;
     }
 
