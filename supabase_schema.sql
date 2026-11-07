@@ -205,3 +205,44 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.auction_sessions (id, status, current_bid, bid_increment)
 VALUES (1, 'pre_auction', 0, 50000)
 ON CONFLICT (id) DO NOTHING;
+
+
+-- 14. SEED ALL 25 PLAYERS
+INSERT INTO public.players (id, name, position, rating, nationality, age, base_price, sold_price, status, team_id, photo_url, photo_scale, photo_x, photo_y, is_shortlisted, badges, category)
+VALUES
+  ('dfb05d6a-9b9a-4358-b0ef-178f8828767d', 'THANVEER', 'FWD', 78, 'Indian', 28, 80000, NULL, 'available', NULL, '/uploads/players/player-1793986778780-437223229.png', 0.82, 21, 37, TRUE, '[]', 'standard'),
+  ('3ef4825c-4ca7-490f-98e0-e8ccf1d1ccb6', 'Vikram Desai', 'FWD', 72, 'Indian', 24, 30000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('26f3783c-37de-4d43-9764-6a0db4d97908', 'Ravi Menon', 'FWD', 65, 'Indian', 22, 20000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('5dce88e4-a359-4e10-a9cd-306f4c28039b', 'Mohammed Khan', 'FWD', 80, 'Indian', 27, 60000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'premium'),
+  ('d35b2a7c-a78c-4b02-9361-ea8d5723cb20', 'Suresh Nair', 'FWD', 75, 'Indian', 26, 40000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('53cd8170-c8e3-4a7c-9c66-893808f34d34', 'FOUZAN', 'FWD', 73, 'Indian', 25, 35000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('3d375c2e-050e-4865-b3bb-af821b55a648', 'SAMEER', 'FWD', 68, 'Indian', 23, 25000, NULL, 'available', NULL, '/uploads/players/player-1793642623318-781164184.png', 1, 0, 0, TRUE, '[]', 'special'),
+  ('fc5215a5-c06b-4de4-b64e-d81718f7cb66', 'Pranav Yadav', 'FWD', 76, 'Indian', 25, 45000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'premium'),
+  ('0314c4c9-68f3-4e75-ac58-81bffe0ea90b', 'MUHAMMED', 'FWD', 74, 'Indian', 26, 40000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('081088ea-eaf2-4b83-b557-bb4b07631b93', 'AFEEF', 'FWD', 66, 'Indian', 22, 20000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'special'),
+  ('7cdcef96-f6df-4739-8ed7-62959c2f0382', 'Rohit Gupta', 'FWD', 82, 'Indian', 29, 70000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'star'),
+  ('458ec33d-c120-4e96-bdba-cbf11b4c5fc7', 'Siddharth Iyer', 'FWD', 79, 'Indian', 27, 55000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'premium'),
+  ('293adf16-c231-45b8-81da-55821a3e50ee', 'MASHQOOR', 'FWD', 74, 'Indian', 25, 40000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('eca8e154-bc09-4dd2-9cdb-d4f357adc4f9', 'HANAN', 'FWD', 70, 'Indian', 24, 30000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('0800ca0a-77a3-4d7b-9849-ed3f1556063a', 'Rajesh Kumar', 'FWD', 84, 'Indian', 26, 80000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'star'),
+  ('25296d54-7bca-4521-835d-f381cd7266b6', 'Nikhil Verma', 'FWD', 75, 'Indian', 24, 45000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'premium'),
+  ('6bf4f86c-1741-44d1-86b6-d9de7326e099', 'Vishal Choudhury', 'FWD', 67, 'Indian', 21, 25000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('cf9d59cf-f13a-4630-ac05-02aade55f21b', 'Farhan ', 'FWD', 85, 'Indian', 25, 90000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'star'),
+  ('46213147-7ab5-4e32-a390-a9d97220ab0e', 'SHIYAM', 'FWD', 78, 'Indian', 24, 60000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'premium'),
+  ('42c191d3-9c6e-4124-80b3-99b55e0d0484', 'Santosh Pillai', 'FWD', 72, 'Indian', 23, 35000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('f92ce6dc-7709-4a9c-998c-d5c1581d301d', 'Manoj Singh', 'FWD', 68, 'Indian', 22, 25000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'standard'),
+  ('4dda2310-406b-4e5c-9997-ab7ff5d93aa7', 'Vikrant Thapa', 'FWD', 86, 'Indian', 27, 100000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'star'),
+  ('e0abd0f7-5afe-49a5-9d94-00dd4207e572', 'AKMAL', 'FWD', 80, 'Indian', 26, 70000, NULL, 'available', NULL, '/uploads/players/player-1793771163906-682820612.png', 1, 0, 0, TRUE, '["Finisher++","Golden Boot","Safe Hands","Playmaker","Defensive Wall","Speed Demon"]', 'premium'),
+  ('a079dfc3-2895-45cd-844c-ecdd0205eecb', 'HAYAN', 'FWD', 77, 'Indian', 25, 55000, NULL, 'available', NULL, '', 1, 0, 0, TRUE, '[]', 'premium'),
+  ('b4cfe8dd-1292-455c-a629-775b1533ef05', 'SAMEER', 'FWD', 62, 'Indian', 20, 10000, NULL, 'available', NULL, '/uploads/players/player-1793697098843-618333225.webp', 1, 0, 0, TRUE, '[]', 'standard')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  position = EXCLUDED.position,
+  rating = EXCLUDED.rating,
+  base_price = EXCLUDED.base_price,
+  photo_url = EXCLUDED.photo_url,
+  photo_scale = EXCLUDED.photo_scale,
+  photo_x = EXCLUDED.photo_x,
+  photo_y = EXCLUDED.photo_y,
+  badges = EXCLUDED.badges,
+  category = EXCLUDED.category;

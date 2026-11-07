@@ -1,10 +1,5 @@
 /**
- * AuthContext — Supabase authentication with offline/local fallback.
- *
- * Guarantees zero downtime:
- * - If Supabase credentials are configured, it authenticates via Supabase Auth.
- * - If Supabase credentials are not yet set in Vercel or connection fails,
- *   it falls back to local session authentication so the app NEVER goes black or blocks login.
+ * AuthContext — Supabase authentication with spectator and offline fallback.
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -127,24 +122,41 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Login handler
-  const login = useCallback(async (username, password) => {
+  const login = useCallback(async (username, password, displayName) => {
     setError(null);
-    const cleanUser = username.trim().toUpperCase();
+    const cleanUser = (username || '').trim();
+    const cleanPass = (password || '').trim();
 
-    // 1. Try Supabase Auth if configured
+    // 1. Spectator Access via password 111
+    if (cleanPass === '111') {
+      const spectatorUser = {
+        id: 'spectator_' + (cleanUser.toLowerCase() || 'player'),
+        username: cleanUser || 'player',
+        displayName: displayName || cleanUser || 'Spectator',
+        role: 'spectator',
+        teamId: null,
+      };
+      setUser(spectatorUser);
+      saveUser(spectatorUser);
+      return spectatorUser;
+    }
+
+    const upperUser = cleanUser.toUpperCase();
+
+    // 2. Try Supabase Auth if configured
     if (isSupabaseConfigured) {
       try {
         const { data: profiles, error: lookupErr } = await supabase
           .from('profiles')
           .select('email, role, team_id, display_name, id, username')
-          .eq('username', cleanUser)
+          .eq('username', upperUser)
           .limit(1);
 
         if (!lookupErr && profiles && profiles.length > 0) {
           const profile = profiles[0];
           const { error: signInErr } = await supabase.auth.signInWithPassword({
             email: profile.email,
-            password: password.trim(),
+            password: cleanPass,
           });
 
           if (!signInErr) {
@@ -165,9 +177,9 @@ export function AuthProvider({ children }) {
       }
     }
 
-    // 2. Reliable fallback for tournament users
-    const fallback = LOCAL_FALLBACK_USERS[cleanUser];
-    if (fallback && fallback.pass === password.trim()) {
+    // 3. Reliable tournament user fallback
+    const fallback = LOCAL_FALLBACK_USERS[upperUser];
+    if (fallback && fallback.pass === cleanPass) {
       const loggedIn = {
         id: fallback.id,
         username: fallback.username,

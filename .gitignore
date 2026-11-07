@@ -6,6 +6,9 @@ client/node_modules/
 dist/
 client/dist/
 
+# Scratch directory
+scratch/
+
 # Environment files
 .env
 .env.local
