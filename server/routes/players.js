@@ -12,9 +12,14 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const { parse } = require('csv-parse/sync');
 
-const uploadDir = path.join(__dirname, '../../uploads/players');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const isVercel = Boolean(process.env.VERCEL);
+const uploadDir = isVercel ? '/tmp/uploads/players' : path.join(__dirname, '../../uploads/players');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn('[Players] Could not create upload directory:', err.message);
 }
 
 const storage = multer.diskStorage({
