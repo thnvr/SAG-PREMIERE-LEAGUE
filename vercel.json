@@ -1,10 +1,8 @@
 {
   "version": 2,
   "buildCommand": "node build.cjs",
+  "outputDirectory": "client/dist",
   "rewrites": [
-    {
-      "source": "/((?!api|uploads).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
