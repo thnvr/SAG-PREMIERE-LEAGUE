@@ -16,7 +16,9 @@ import {
   X,
   Phone,
   Mail,
-  Instagram
+  Instagram,
+  Smartphone,
+  Download
 } from 'lucide-react';
 
 export default function Layout({ children }) {
@@ -213,6 +215,21 @@ export default function Layout({ children }) {
                   <span>ADMIN OPERATIONS DESK</span>
                 </Link>
               )}
+              {/* Install App on Phone Shortcut */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  window.dispatchEvent(new Event('trigger-app-install'));
+                }}
+                className="w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-black tracking-wider uppercase transition-all mt-3 bg-gradient-to-r from-[#ffd000]/15 to-[#ffd000]/5 border border-[#ffd000]/40 text-[#ffd000] hover:bg-[#ffd000]/25 cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Smartphone className="w-4 h-4 text-[#ffd000]" />
+                  <span>INSTALL APP ON PHONE</span>
+                </div>
+                <Download className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {/* Bottom hotline & info inside drawer */}

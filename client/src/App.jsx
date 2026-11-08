@@ -25,6 +25,7 @@ import AuctionConfig from './pages/AuctionConfig';
 import LeagueSettings from './pages/LeagueSettings';
 import ReportsPage from './pages/ReportsPage';
 import AuditLog from './pages/AuditLog';
+import InstallAppPrompt from './components/InstallAppPrompt';
 
 export default function App() {
   const { user } = useAuth();
@@ -35,7 +36,8 @@ export default function App() {
   }
 
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route
         path="/spectator"
         element={
@@ -223,5 +225,7 @@ export default function App() {
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  );
+    <InstallAppPrompt />
+  </>
+);
 }

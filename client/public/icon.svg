@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="shieldBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e2029" />
+      <stop offset="100%" stop-color="#0e0f14" />
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe853" />
+      <stop offset="50%" stop-color="#ffd000" />
+      <stop offset="100%" stop-color="#cca600" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Dark Background Canvas -->
+  <rect width="512" height="512" rx="100" fill="#111215" />
+
+  <!-- Outer Shield Border -->
+  <path d="M 256 48 L 416 112 C 416 280 256 448 256 448 C 256 448 96 280 96 112 Z" 
+        fill="url(#shieldBg)" stroke="url(#gold)" stroke-width="14" filter="url(#glow)" />
+
+  <!-- Inner Shield Trim -->
+  <path d="M 256 76 L 392 130 C 392 270 256 416 256 416 C 256 416 120 270 120 130 Z" 
+        fill="none" stroke="#ffd000" stroke-width="3" stroke-dasharray="6,4" opacity="0.6" />
+
+  <!-- Central Football Icon -->
+  <circle cx="256" cy="220" r="70" fill="none" stroke="url(#gold)" stroke-width="12" />
+  <circle cx="256" cy="220" r="28" fill="url(#gold)" />
+  <path d="M 256 150 L 256 192 M 256 248 L 256 290 M 186 220 L 228 220 M 284 220 L 326 220" stroke="url(#gold)" stroke-width="8" stroke-linecap="round" />
+
+  <!-- League Text / Acronym -->
+  <text x="256" y="348" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#ffffff" letter-spacing="4">
+    SAG PREMIERE
+  </text>
+  <text x="256" y="386" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="24" fill="#ffd000" letter-spacing="6">
+    LEAGUE
+  </text>
+</svg>
