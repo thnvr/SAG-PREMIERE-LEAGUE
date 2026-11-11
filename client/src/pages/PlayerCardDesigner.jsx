@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { playersAPI, formatMoney } from '../services/api';
+import { playersAPI, formatMoney } from '../services/sheetsService';
 import PlayerCard from '../components/PlayerCard';
 import { toPng } from 'html-to-image';
 import { useAuth } from '../context/AuthContext';

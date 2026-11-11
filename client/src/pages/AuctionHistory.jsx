@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auctionAPI, formatMoney } from '../services/api';
+import { auctionAPI, formatMoney } from '../services/sheetsService';
 import { History, Search, Download, Filter, FileText } from 'lucide-react';
 
 export default function AuctionHistory() {

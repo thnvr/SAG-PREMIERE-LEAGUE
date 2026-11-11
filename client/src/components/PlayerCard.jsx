@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatMoney } from '../services/api';
+import { formatMoney } from '../services/sheetsService';
 
 // ============================================================
 // FIFA NATIONAL TEAM FLAGS  — emoji flags for all FIFA members

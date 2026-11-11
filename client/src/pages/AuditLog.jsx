@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auditAPI, formatMoney } from '../services/api';
+import { auditAPI, formatMoney } from '../services/sheetsService';
 import Modal from '../components/Modal';
 import { ClipboardList, ShieldAlert, RotateCcw, AlertCircle, Check } from 'lucide-react';
 

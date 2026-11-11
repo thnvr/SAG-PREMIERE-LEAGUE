@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { teamsAPI } from '../services/api';
+import { teamsAPI } from '../services/sheetsService';
 
 export function useTeams() {
   const [teams, setTeams] = useState([]);

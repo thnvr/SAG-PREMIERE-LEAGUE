@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { teamsAPI, formatMoney } from '../services/api';
+import { teamsAPI, formatMoney } from '../services/sheetsService';
 import PlayerCard from '../components/PlayerCard';
 import { Shield, Users, Wallet, ArrowLeft, AlertCircle } from 'lucide-react';
 

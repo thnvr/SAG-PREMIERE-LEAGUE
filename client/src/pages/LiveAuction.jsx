@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
-import { formatMoney, playersAPI, auctionAPI } from '../services/api';
+import { formatMoney, playersAPI, auctionAPI } from '../services/sheetsService';
 import PlayerCard from '../components/PlayerCard';
 import TeamCard from '../components/TeamCard';
 import CountdownTimer from '../components/CountdownTimer';

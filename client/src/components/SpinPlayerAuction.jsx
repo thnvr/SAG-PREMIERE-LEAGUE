@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { playersAPI, auctionAPI, formatMoney } from '../services/api';
+import { playersAPI, auctionAPI, formatMoney } from '../services/sheetsService';
 import { useAuction } from '../context/AuctionContext';
 import {
   RotateCw,

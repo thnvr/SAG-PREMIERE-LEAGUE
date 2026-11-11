@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatMoney } from '../services/api';
+import { formatMoney } from '../services/sheetsService';
 import { Award, CheckCircle, Sparkles } from 'lucide-react';
 
 export default function SoldBanner({ sale, onClose }) {

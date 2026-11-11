@@ -1,5 +1,5 @@
 import React from 'react';
-import { reportsAPI } from '../services/api';
+import { reportsAPI } from '../services/sheetsService';
 import { FileText, Download, Shield, Users, Wallet, CheckCircle } from 'lucide-react';
 
 export default function ReportsPage() {

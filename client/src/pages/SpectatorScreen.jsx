@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
-import { getToken, formatMoney, spectatorAPI } from '../services/api';
+import { getToken, formatMoney, spectatorAPI } from '../services/sheetsService';
 import { loadHistoryAndPoll, recordGoogleActivity, WEB_APP_URL } from '../services/googleFeedAPI';
 import PlayerCard from '../components/PlayerCard';
 import CountdownTimer from '../components/CountdownTimer';

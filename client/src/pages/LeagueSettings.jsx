@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, formatMoney } from '../services/api';
+import { adminAPI, formatMoney } from '../services/sheetsService';
 import { Settings, Save, Shield, Clock, IndianRupee, AlertCircle, Check } from 'lucide-react';
 
 export default function LeagueSettings() {

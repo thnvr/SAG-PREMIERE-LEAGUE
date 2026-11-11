@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
-import { formatMoney } from '../services/api';
+import { formatMoney } from '../services/sheetsService';
 import TeamCard from '../components/TeamCard';
 import {
   Trophy,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { playersAPI, formatMoney } from '../services/api';
+import { playersAPI, formatMoney } from '../services/sheetsService';
 import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
 import ImageCropModal from '../components/ImageCropModal';

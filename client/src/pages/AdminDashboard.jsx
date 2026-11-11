@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney } from '../services/api';
+import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney } from '../services/sheetsService';
 import StatsCard from '../components/StatsCard';
 import AwardsPoster from '../components/AwardsPoster';
 import SpinPlayerAuction from '../components/SpinPlayerAuction';

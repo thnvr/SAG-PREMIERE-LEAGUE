@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { teamsAPI, formatMoney } from '../services/api';
+import { teamsAPI, formatMoney } from '../services/sheetsService';
 import { Trophy, Award, Shield, Users, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

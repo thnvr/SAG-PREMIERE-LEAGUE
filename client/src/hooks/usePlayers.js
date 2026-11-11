@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { playersAPI } from '../services/api';
+import { playersAPI } from '../services/sheetsService';
 
 export function usePlayers(initialFilters = {}) {
   const [players, setPlayers] = useState([]);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { playersAPI, formatMoney } from '../services/api';
+import { playersAPI, formatMoney } from '../services/sheetsService';
 import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
 import {

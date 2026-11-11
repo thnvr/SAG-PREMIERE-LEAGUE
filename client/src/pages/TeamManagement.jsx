@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { teamsAPI, formatMoney } from '../services/api';
+import { teamsAPI, formatMoney } from '../services/sheetsService';
 import TeamCard from '../components/TeamCard';
 import Modal from '../components/Modal';
 import { Shield, Plus, Edit, Users, User, Check, AlertCircle } from 'lucide-react';

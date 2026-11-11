@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { playersAPI, auctionAPI, formatMoney } from '../services/api';
+import { playersAPI, auctionAPI, formatMoney } from '../services/sheetsService';
 import { useAuction } from '../context/AuctionContext';
 import { Gavel, ListOrdered, Play, ArrowRight, Shield } from 'lucide-react';
 

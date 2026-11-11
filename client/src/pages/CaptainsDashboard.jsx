@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
-import { formatMoney, getToken, spectatorAPI } from '../services/api';
+import { formatMoney, getToken, spectatorAPI } from '../services/sheetsService';
 import { connectSocket } from '../services/socket';
 import TeamCard from '../components/TeamCard';
 import { Link } from 'react-router-dom';

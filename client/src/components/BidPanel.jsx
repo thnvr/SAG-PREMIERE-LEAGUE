@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formatMoney } from '../services/api';
+import { formatMoney } from '../services/sheetsService';
 import { AlertCircle, Zap, Shield, Check, TrendingUp } from 'lucide-react';
 
 export default function BidPanel({
