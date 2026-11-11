@@ -11,7 +11,7 @@ export default function ConnectionIndicator() {
         onClick={() => setShowModal(true)}
         type="button"
         title="Google Sheets Backend: Connected & Active"
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold transition cursor-pointer border bg-emerald-950/40 border-emerald-500/40 text-emerald-400 hover:border-emerald-400"
+        className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold transition cursor-pointer border bg-emerald-950/40 border-emerald-500/40 text-emerald-400 hover:border-emerald-400 flex-shrink-0"
       >
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         <FileSpreadsheet className="w-3 h-3 text-[#ffd000]" />

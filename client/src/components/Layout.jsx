@@ -49,7 +49,7 @@ export default function Layout({ children }) {
       
       {/* Top Header - Precision Aligned Navigation Bar */}
       <header className="sticky top-0 z-50 bg-[#111215]/95 backdrop-blur-md border-b border-[#22242b]">
-        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-[1400px] mx-auto px-2.5 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-1 sm:gap-4">
           
           {/* Official League Football Shield Logo */}
           <Link to="/" className="flex items-center gap-2.5 sm:gap-3 group flex-shrink-0 min-w-0">
@@ -73,7 +73,7 @@ export default function Layout({ children }) {
               </svg>
             </div>
             <div className="flex flex-col leading-none truncate">
-              <span className="font-black text-sm sm:text-base lg:text-lg tracking-tight text-white uppercase leading-tight truncate">
+              <span className="font-black text-xs sm:text-base lg:text-lg tracking-tight text-white uppercase leading-tight truncate">
                 SAG <span className="text-[#ffd000]">PREMIERE LEAGUE</span>
               </span>
               <span className="hidden xs:block text-[8px] sm:text-[9px] tracking-[0.18em] text-[#6b6e7a] font-bold uppercase mt-0.5 whitespace-nowrap">
@@ -129,7 +129,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={handleLogout}
                   title="Logout"
-                  className="p-1.5 sm:p-2 rounded-md bg-[#18191f] hover:bg-rose-950/40 text-[#8b8e99] hover:text-rose-400 border border-[#282a35] transition"
+                  className="hidden sm:flex p-1.5 sm:p-2 rounded-md bg-[#18191f] hover:bg-rose-950/40 text-[#8b8e99] hover:text-rose-400 border border-[#282a35] transition"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -146,7 +146,7 @@ export default function Layout({ children }) {
             {/* Mobile / Tablet menu toggle */}
             <button
               onClick={() => setMobileMenuOpen(prev => !prev)}
-              className="lg:hidden p-2 rounded-lg bg-[#18191f] text-[#8b8e99] hover:text-white border border-[#282a35] transition relative z-[60] flex items-center justify-center cursor-pointer"
+              className="lg:hidden p-2 rounded-lg bg-[#18191f] text-[#ffd000] hover:text-white border border-[#282a35] hover:border-[#ffd000]/50 transition relative z-[60] flex items-center justify-center cursor-pointer flex-shrink-0 ml-0.5"
               aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5 text-[#ffd000]" /> : <Menu className="w-5 h-5" />}
@@ -156,7 +156,7 @@ export default function Layout({ children }) {
 
         {/* Mobile / Tablet Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden fixed inset-0 top-16 bg-[#0c0d10] z-50 p-4 pb-8 overflow-y-auto flex flex-col justify-between border-t border-[#22242b]">
+          <div className="lg:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-[#0c0d10] border-t border-[#22242b] p-4 pb-8 overflow-y-auto flex flex-col justify-between">
             <div className="space-y-2">
               {/* User Status Strip on Mobile */}
               {isAuthenticated && (
