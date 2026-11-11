@@ -1,8 +1,7 @@
 /**
- * AuthContext — Supabase authentication with spectator and offline fallback.
+ * AuthContext — Tournament authentication with Google Activity logging.
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { recordGoogleActivity } from '../services/googleFeedAPI';
 
 const AuthContext = createContext(null);
@@ -78,48 +77,7 @@ export function AuthProvider({ children }) {
 
   // Restore session safely
   useEffect(() => {
-    let mounted = true;
-
-    async function initAuth() {
-      try {
-        if (isSupabaseConfigured) {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          if (sessionError) throw sessionError;
-
-          if (session?.user && mounted) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-
-            if (profile) {
-              const u = {
-                id: profile.id,
-                username: profile.username,
-                displayName: profile.display_name || profile.username,
-                role: profile.role,
-                teamId: profile.team_id || null,
-              };
-              setUser(u);
-              saveUser(u);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[Auth] Session restore error:', err.message);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    initAuth();
-
-    return () => {
-      mounted = false;
-    };
+    setLoading(false);
   }, []);
 
   // Login handler
@@ -148,45 +106,7 @@ export function AuthProvider({ children }) {
 
     const upperUser = cleanUser.toUpperCase();
 
-    // 2. Try Supabase Auth if configured
-    if (isSupabaseConfigured) {
-      try {
-        const { data: profiles, error: lookupErr } = await supabase
-          .from('profiles')
-          .select('email, role, team_id, display_name, id, username')
-          .eq('username', upperUser)
-          .limit(1);
-
-        if (!lookupErr && profiles && profiles.length > 0) {
-          const profile = profiles[0];
-          const { error: signInErr } = await supabase.auth.signInWithPassword({
-            email: profile.email,
-            password: cleanPass,
-          });
-
-          if (!signInErr) {
-            const loggedIn = {
-              id: profile.id,
-              username: profile.username,
-              displayName: profile.display_name || profile.username,
-              role: profile.role,
-              teamId: profile.team_id || null,
-            };
-            setUser(loggedIn);
-            saveUser(loggedIn);
-            recordGoogleActivity({
-              user: loggedIn.displayName,
-              status: `Logged In (${loggedIn.role})`,
-            });
-            return loggedIn;
-          }
-        }
-      } catch (err) {
-        console.warn('[Auth] Supabase login attempted, trying fallback:', err.message);
-      }
-    }
-
-    // 3. Reliable tournament user fallback
+    // 2. Reliable tournament user login
     const fallback = LOCAL_FALLBACK_USERS[upperUser];
     if (fallback && fallback.pass === cleanPass) {
       const loggedIn = {
@@ -210,17 +130,9 @@ export function AuthProvider({ children }) {
     throw new Error(msg);
   }, []);
 
-  const logout = useCallback(async () => {
-    try {
-      if (isSupabaseConfigured) {
-        await supabase.auth.signOut();
-      }
-    } catch (err) {
-      console.warn('Sign out error:', err);
-    } finally {
-      setUser(null);
-      saveUser(null);
-    }
+  const logout = useCallback(() => {
+    setUser(null);
+    saveUser(null);
   }, []);
 
   const isAuthenticated = !!user;

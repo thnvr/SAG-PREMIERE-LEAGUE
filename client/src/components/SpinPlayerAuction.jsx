@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { playersAPI, auctionAPI, formatMoney } from '../services/api';
 import { useAuction } from '../context/AuctionContext';
-import { pushPlayerToAuction } from '../services/firebaseAuction';
 import {
   RotateCw,
   Zap,
@@ -229,13 +228,6 @@ export default function SpinPlayerAuction({ onNominated }) {
     setNominateLoading(true);
     setError(null);
     try {
-      // Instant push to Firebase Firestore doc 'auction/liveState'
-      pushPlayerToAuction(selectedWinner, {
-        currentBid: selectedWinner.base_price,
-        highestBidder: 'None',
-        status: 'active',
-      }).catch(() => {});
-
       await nominatePlayer(selectedWinner.id, {
         name: selectedWinner.name,
         base_price: selectedWinner.base_price,

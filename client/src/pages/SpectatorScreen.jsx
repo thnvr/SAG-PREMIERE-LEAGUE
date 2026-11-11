@@ -3,9 +3,6 @@ import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { getToken, formatMoney, spectatorAPI } from '../services/api';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { isFirebaseConfigured } from '../lib/firebase';
-import { sendChatMessage as sendFirebaseChat, subscribeChatMessages } from '../services/firebaseAuction';
 import { loadHistoryAndPoll, recordGoogleActivity, WEB_APP_URL } from '../services/googleFeedAPI';
 import PlayerCard from '../components/PlayerCard';
 import CountdownTimer from '../components/CountdownTimer';
@@ -116,50 +113,9 @@ export default function SpectatorScreen() {
       }
     } catch {}
 
-    // 4. Supabase Realtime channel for live internet broadcasts
-    let channel = null;
-    if (isSupabaseConfigured) {
-      try {
-        channel = supabase
-          .channel('spectator-chat-live')
-          .on(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'spectator_comments' },
-            (payload) => {
-              if (payload.new) {
-                mergeComments({
-                  id: payload.new.id,
-                  user: payload.new.author_name,
-                  text: payload.new.message,
-                  reaction: payload.new.reaction || '🔥',
-                  time: payload.new.created_at,
-                });
-              }
-            }
-          )
-          .subscribe();
-      } catch {}
-    }
-
-    // 5. Firebase Firestore Real-Time Chat Listener
-    let unsubFirebaseChat = () => {};
-    if (isFirebaseConfigured) {
-      try {
-        unsubFirebaseChat = subscribeChatMessages((fireMessages) => {
-          if (fireMessages && fireMessages.length > 0) {
-            mergeComments(fireMessages);
-          }
-        });
-      } catch (err) {
-        console.warn('Firebase chat error:', err);
-      }
-    }
-
     return () => {
       clearInterval(pollTimer);
       if (bc) bc.close();
-      if (channel) supabase.removeChannel(channel);
-      unsubFirebaseChat();
     };
   }, [user?.id]);
 
@@ -176,9 +132,6 @@ export default function SpectatorScreen() {
 
     setChatError('');
     try {
-      // Broadcast to Firebase Firestore for sub-second sync across all spectator phones/laptops
-      sendFirebaseChat(sender, text, reaction).catch(() => {});
-
       const res = await spectatorAPI.postComment({ text, reaction, user: sender });
       if (res?.comment) {
         mergeComments(res.comment);
