@@ -27,6 +27,7 @@ export const AuctionProvider = ({ children }) => {
   const [countdown, setCountdown] = useState(30);
   const [soldAnimation, setSoldAnimation] = useState(null);
   const [recentBids, setRecentBids] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
 
   // Poll Google Sheets every 1.5 seconds for real-time updates across screens
   useEffect(() => {
@@ -53,6 +54,9 @@ export const AuctionProvider = ({ children }) => {
           }
           if (data.teams && Array.isArray(data.teams) && data.teams.length > 0) {
             setTeams(data.teams.map(normalizeTeam));
+          }
+          if (data.chatMessages) {
+            setChatMessages(data.chatMessages);
           }
         }
       } catch (err) {
@@ -288,6 +292,8 @@ export const AuctionProvider = ({ children }) => {
         soldAnimation,
         setSoldAnimation,
         recentBids,
+        chatMessages,
+        setChatMessages,
         recentSales,
         availablePool,
         manualBid,

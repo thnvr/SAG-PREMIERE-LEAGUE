@@ -443,3 +443,13 @@ export const auditAPI = {
 export const awardsAPI = {
   getAll: async () => [],
 };
+
+
+export async function sendSpectatorChat(name, message, reaction = "") {
+  return await callSheetsAPI({
+    action: "sendChatMessage",
+    name: name,
+    message: message,
+    reaction: reaction
+  });
+}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuction } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
-import { getToken, formatMoney, spectatorAPI } from '../services/sheetsService';
+import { getToken, formatMoney, spectatorAPI, sendSpectatorChat } from '../services/sheetsService';
 import { loadHistoryAndPoll, recordGoogleActivity, WEB_APP_URL } from '../services/googleFeedAPI';
 import PlayerCard from '../components/PlayerCard';
 import CountdownTimer from '../components/CountdownTimer';
@@ -35,7 +35,8 @@ export default function SpectatorScreen() {
     teams,
     countdown,
     soldAnimation,
-    setSoldAnimation
+    setSoldAnimation,
+    chatMessages
   } = useAuction();
   const { user } = useAuth();
 
@@ -119,6 +120,14 @@ export default function SpectatorScreen() {
     };
   }, [user?.id]);
 
+
+  // Automatically sync chatMessages from Google Sheets polling into Spectator comments
+  useEffect(() => {
+    if (chatMessages && Array.isArray(chatMessages) && chatMessages.length > 0) {
+      mergeComments(chatMessages);
+    }
+  }, [chatMessages]);
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments]);
@@ -132,6 +141,7 @@ export default function SpectatorScreen() {
 
     setChatError('');
     try {
+      sendSpectatorChat(sender, text, reaction).catch(() => {});
       const res = await spectatorAPI.postComment({ text, reaction, user: sender });
       if (res?.comment) {
         mergeComments(res.comment);
