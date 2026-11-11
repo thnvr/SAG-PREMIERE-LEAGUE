@@ -361,6 +361,27 @@ export const teamsAPI = {
     }
     return null;
   },
+
+  create: async (teamData) => {
+    const list = getLocalTeams();
+    const newTeam = {
+      id: teamData.id || 'team_' + Date.now(),
+      total_purse: teamData.initial_purse || 2000000,
+      remaining_purse: teamData.initial_purse || 2000000,
+      squad: [],
+      ...teamData,
+    };
+    list.push(newTeam);
+    saveLocalTeams(list);
+    return normalizeTeam(newTeam);
+  },
+
+  delete: async (id) => {
+    const list = getLocalTeams();
+    const updated = list.filter((t) => t.id !== id);
+    saveLocalTeams(updated);
+    return true;
+  },
 };
 
 // ── Auction API ────────────────────────────────────────────────────────────
@@ -426,6 +447,45 @@ export const adminAPI = {
   resetAuction: async () => {
     return callSheetsAPI({ action: 'markUnsold' });
   },
+  getDashboard: async () => {
+    const teams = getLocalTeams();
+    const players = getLocalPlayers();
+    const totalInitialPurse = teams.reduce((acc, t) => acc + (Number(t.total_purse ?? t.initial_purse) || 0), 0);
+    const totalRemainingPurse = teams.reduce((acc, t) => acc + (Number(t.remaining_purse ?? t.remainingPurse ?? t.total_purse ?? t.initial_purse) || 0), 0);
+    const totalSpent = Math.max(0, totalInitialPurse - totalRemainingPurse);
+    const soldPlayers = players.filter(p => p.status === 'sold' || p.auction_status === 'sold').length;
+    const unsoldPlayers = players.filter(p => p.status === 'unsold' || p.auction_status === 'unsold').length;
+
+    return {
+      stats: {
+        totalTeams: teams.length,
+        totalPlayers: players.length,
+        soldPlayers,
+        unsoldPlayers,
+        totalInitialPurse,
+        totalSpent,
+        totalRemainingPurse
+      },
+      teamSpending: teams.map(t => {
+        const init = Number(t.total_purse ?? t.initial_purse) || 2000000;
+        const rem = Number(t.remaining_purse ?? t.remainingPurse ?? init);
+        return {
+          id: t.id,
+          name: t.name,
+          color: t.primary_color || '#ffd000',
+          initialPurse: init,
+          totalSpent: Math.max(0, init - rem)
+        };
+      }),
+      positionDistribution: [
+        { primary_position: 'GK', count: players.filter(p => p.primary_position === 'GK').length },
+        { primary_position: 'DEF', count: players.filter(p => ['CB', 'LB', 'RB'].includes(p.primary_position)).length },
+        { primary_position: 'MID', count: players.filter(p => ['CDM', 'CM', 'CAM'].includes(p.primary_position)).length },
+        { primary_position: 'ATT', count: players.filter(p => ['ST', 'LW', 'RW', 'CF'].includes(p.primary_position)).length },
+      ],
+      recentPurchases: players.filter(p => p.status === 'sold' || p.auction_status === 'sold').slice(0, 5)
+    };
+  }
 };
 
 export const reportsAPI = {
@@ -441,7 +501,86 @@ export const auditAPI = {
 };
 
 export const awardsAPI = {
-  getAll: async () => [],
+  getAll: async () => {
+    return awardsAPI.getAwards();
+  },
+
+  getAwards: async () => {
+    try {
+      const raw = localStorage.getItem('sag_tournament_awards');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveAward: async (awardConfig) => {
+    try {
+      const existing = await awardsAPI.getAwards();
+      const updated = [awardConfig, ...existing.filter(a => a.category !== awardConfig.category)];
+      localStorage.setItem('sag_tournament_awards', JSON.stringify(updated));
+      return awardConfig;
+    } catch {
+      return awardConfig;
+    }
+  },
+
+  getBadges: async () => {
+    try {
+      const raw = localStorage.getItem('sag_playstyle_badges');
+      const badges = raw ? JSON.parse(raw) : DEFAULT_BADGES_LIST;
+      return { all: badges };
+    } catch {
+      return { all: DEFAULT_BADGES_LIST };
+    }
+  },
+
+  createBadge: async (badgeData) => {
+    try {
+      const { all: current } = await awardsAPI.getBadges();
+      const newBadge = {
+        id: 'b_' + Date.now(),
+        ...badgeData
+      };
+      const updated = [...current, newBadge];
+      localStorage.setItem('sag_playstyle_badges', JSON.stringify(updated));
+      return newBadge;
+    } catch (e) {
+      return badgeData;
+    }
+  },
+
+  assignPlayerBadge: async (playerId, badgeName, action = 'add') => {
+    const list = getLocalPlayers();
+    const idx = list.findIndex(p => p.id === playerId);
+    if (idx !== -1) {
+      let badges = Array.isArray(list[idx].badges) ? [...list[idx].badges] : [];
+      if (action === 'add' && !badges.includes(badgeName)) {
+        badges.push(badgeName);
+      } else if (action === 'remove') {
+        badges = badges.filter(b => b !== badgeName);
+      }
+      list[idx].badges = badges;
+      saveLocalPlayers(list);
+      return list[idx];
+    }
+    return null;
+  },
+
+  fixTeamPurse: async (teamId, newPursePaise) => {
+    const list = getLocalTeams();
+    const idx = list.findIndex(t => t.id === teamId);
+    if (idx !== -1) {
+      list[idx].total_purse = newPursePaise;
+      list[idx].initial_purse = newPursePaise;
+      list[idx].remaining_purse = newPursePaise;
+      list[idx].remainingPurse = newPursePaise;
+      saveLocalTeams(list);
+      updateTeamPurseInSheets(teamId, newPursePaise, newPursePaise).catch(() => {});
+      return list[idx];
+    }
+    return null;
+  }
 };
 
 

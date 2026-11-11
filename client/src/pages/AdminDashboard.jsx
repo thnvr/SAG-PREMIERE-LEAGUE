@@ -217,7 +217,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // 3. ADD PLAYER HANDLER
+  // 3. ADD PLAYER HANDLER (WITH AUTOMATIC POSITION & STATS BADGE CREATION)
   const handleCreatePlayer = async (e) => {
     e.preventDefault();
     if (!playerForm.name || !playerForm.primary_position) {
@@ -225,6 +225,68 @@ export default function AdminDashboard() {
       return;
     }
     try {
+      // Determine automatic badges based on position and top ratings
+      const autoBadges = [...(playerForm.selectedBadges || [])];
+      const pos = playerForm.primary_position;
+      const speed = parseInt(playerForm.speed_rating || 0, 10);
+      const shot = parseInt(playerForm.shooting_rating || 0, 10);
+      const pass = parseInt(playerForm.passing_rating || 0, 10);
+      const def = parseInt(playerForm.defensive_rating || 0, 10);
+      const ovr = parseInt(playerForm.overall_rating || 0, 10);
+
+      // Signature playstyle badge determination
+      let primaryBadgeName = 'Finisher++';
+      let badgeCategory = 'shooting';
+      let badgeColor = '#ffd000';
+
+      if (['ST', 'CF'].includes(pos)) {
+        primaryBadgeName = shot >= 80 ? 'Elite Sniper' : 'Deadly Finisher';
+        badgeCategory = 'shooting';
+        badgeColor = '#ef4444';
+      } else if (['LW', 'RW'].includes(pos)) {
+        primaryBadgeName = speed >= 80 ? 'Speed Demon' : 'Electric Winger';
+        badgeCategory = 'pace';
+        badgeColor = '#38bdf8';
+      } else if (['CAM', 'CM'].includes(pos)) {
+        primaryBadgeName = pass >= 75 ? 'Master Playmaker' : 'Engine Maestro';
+        badgeCategory = 'passing';
+        badgeColor = '#a855f7';
+      } else if (['CDM', 'CB', 'LB', 'RB'].includes(pos)) {
+        primaryBadgeName = def >= 70 ? 'The Wall' : 'Tactical Stopper';
+        badgeCategory = 'defending';
+        badgeColor = '#22c55e';
+      } else if (pos === 'GK') {
+        primaryBadgeName = 'Safe Hands 🧤';
+        badgeCategory = 'goalkeeping';
+        badgeColor = '#f59e0b';
+      }
+
+      if (ovr >= 85) {
+        autoBadges.push('Marquee Star ⭐');
+      }
+
+      if (!autoBadges.includes(primaryBadgeName)) {
+        autoBadges.push(primaryBadgeName);
+      }
+
+      // Automatically register the generated badge into the badges catalog if not already present
+      try {
+        const { all: currentBadges } = await awardsAPI.getBadges();
+        if (!currentBadges.some(b => b.name === primaryBadgeName)) {
+          await awardsAPI.createBadge({
+            name: primaryBadgeName,
+            category: badgeCategory,
+            icon: 'Award',
+            color: badgeColor,
+            description: `Signature ${pos} playstyle badge automatically generated for ${playerForm.name}.`
+          });
+        }
+      } catch (err) {
+        console.warn('Auto-badge generation notice:', err);
+      }
+
+      const finalBadges = Array.from(new Set(autoBadges));
+
       const newPlayerObj = {
         name: playerForm.name,
         player_number: playerForm.player_number,
@@ -243,11 +305,12 @@ export default function AdminDashboard() {
         defensive_rating: parseInt(playerForm.defensive_rating, 10),
         physical_rating: parseInt(playerForm.physical_rating, 10),
         photo_url: playerForm.photo_url,
-        badges: playerForm.selectedBadges
+        badges: finalBadges
       };
+
       addPlayerToSheets(newPlayerObj).catch(() => {});
       await playersAPI.create(newPlayerObj);
-      flashMessage(`Player "${playerForm.name}" registered successfully!`);
+      flashMessage(`Player "${playerForm.name}" registered with badge "${primaryBadgeName}" automatically!`);
       setShowAddPlayerModal(false);
       setPlayerForm({
         name: '',
