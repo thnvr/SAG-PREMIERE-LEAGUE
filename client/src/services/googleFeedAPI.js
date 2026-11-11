@@ -3,7 +3,7 @@
  * Synchronizes spectator logins, device types, and activity across all devices.
  */
 
-export const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzOeROKyz4OTqNtlT7zbxNGw0sPlX4OgyzXX3g8a6OUxk78Vv1DxW4aWk8rSCMUZg6tmA/exec";
+export const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwArNDQQMX7G0Kze_Evr3NHCKlIAKla0LyLGY5TuaFG63neI8WLqYd20OVebs1ttj8R/exec";
 
 const LOCAL_STORAGE_KEY = 'sag_google_broadcast_feed';
 
