@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney } from '../services/sheetsService';
+import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney, addTeamToSheets, addPlayerToSheets } from '../services/sheetsService';
+import { useAuction } from '../context/AuctionContext';
 import StatsCard from '../components/StatsCard';
 import AwardsPoster from '../components/AwardsPoster';
 import SpinPlayerAuction from '../components/SpinPlayerAuction';
@@ -33,6 +34,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboard() {
+  const { players: contextPlayers = [], teams: contextTeams = [] } = useAuction();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'poster' | 'teams' | 'players' | 'badges'
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -120,8 +122,8 @@ export default function AdminDashboard() {
       ]);
 
       setData(dashRes);
-      setTeams(teamsRes || []);
-      setPlayers(playersRes || []);
+      setTeams(contextTeams.length > 0 ? contextTeams : (teamsRes || []));
+      setPlayers(contextPlayers.length > 0 ? contextPlayers : (playersRes || []));
       setBadges(badgesRes?.all || badgesRes || []);
       setAwards(awardsRes || []);
       setLoading(false);
@@ -134,6 +136,18 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadAllData();
   }, []);
+  useEffect(() => {
+    if (contextTeams && contextTeams.length > 0) {
+      setTeams(contextTeams);
+    }
+  }, [contextTeams]);
+
+  useEffect(() => {
+    if (contextPlayers && contextPlayers.length > 0) {
+      setPlayers(contextPlayers);
+    }
+  }, [contextPlayers]);
+
 
   // 1. ADD TEAM HANDLER
   const handleCreateTeam = async (e) => {
@@ -143,16 +157,18 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      await teamsAPI.create({
+      const newTeamObj = {
         name: teamForm.name,
         short_name: teamForm.short_name.toUpperCase(),
         primary_color: teamForm.primary_color,
         secondary_color: teamForm.secondary_color,
-        initial_purse: parseInt(teamForm.initial_purse_rupees, 10) * 100, // convert rupees to paise
+        initial_purse: parseInt(teamForm.initial_purse_rupees, 10) * 100,
         max_squad_size: parseInt(teamForm.max_squad_size, 10),
         captain_name: teamForm.captain_name || 'Captain',
         logo_url: teamForm.logo_url
-      });
+      };
+      addTeamToSheets(newTeamObj).catch(() => {});
+      await teamsAPI.create(newTeamObj);
       flashMessage(`Franchise "${teamForm.name}" created successfully!`);
       setShowAddTeamModal(false);
       setTeamForm({
@@ -209,7 +225,7 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      await playersAPI.create({
+      const newPlayerObj = {
         name: playerForm.name,
         player_number: playerForm.player_number,
         primary_position: playerForm.primary_position,
@@ -228,7 +244,9 @@ export default function AdminDashboard() {
         physical_rating: parseInt(playerForm.physical_rating, 10),
         photo_url: playerForm.photo_url,
         badges: playerForm.selectedBadges
-      });
+      };
+      addPlayerToSheets(newPlayerObj).catch(() => {});
+      await playersAPI.create(newPlayerObj);
       flashMessage(`Player "${playerForm.name}" registered successfully!`);
       setShowAddPlayerModal(false);
       setPlayerForm({
@@ -322,6 +340,21 @@ export default function AdminDashboard() {
       </div>
     );
   }
+
+
+  // Dynamic summary calculations driven directly by Google Sheet sync / context
+  const activeTeamsList = teams.length > 0 ? teams : contextTeams;
+  const activePlayersList = players.length > 0 ? players : contextPlayers;
+
+  const totalTeams = activeTeamsList.length;
+  const totalPlayers = activePlayersList.length;
+
+  const totalLeaguePurse = activeTeamsList.reduce((acc, t) => acc + (Number(t.total_purse ?? t.initial_purse) || 0), 0);
+  const totalRemainingPurse = activeTeamsList.reduce((acc, t) => acc + (Number(t.remaining_purse ?? t.remainingPurse ?? t.total_purse ?? t.initial_purse) || 0), 0);
+  const totalMoneySpent = Math.max(0, totalLeaguePurse - totalRemainingPurse);
+
+  const soldPlayersCount = activePlayersList.filter(p => p.status === 'sold' || p.auction_status === 'sold').length;
+  const unsoldPlayersCount = activePlayersList.filter(p => p.status === 'unsold' || p.auction_status === 'unsold').length;
 
   const stats = data?.stats || {};
   const teamSpending = data?.teamSpending || [];
@@ -772,25 +805,25 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <StatsCard
               title="Total Franchises"
-              value={stats.totalTeams || teams.length || 3}
+              value={totalTeams}
               icon={Shield}
               variant="primary"
             />
             <StatsCard
               title="Total Registered"
-              value={stats.totalPlayers || players.length || 0}
+              value={totalPlayers}
               icon={Users}
               variant="default"
             />
             <StatsCard
               title="Players Sold"
-              value={stats.soldPlayers || 0}
+              value={soldPlayersCount}
               icon={UserCheck}
               variant="success"
             />
             <StatsCard
               title="Players Unsold"
-              value={stats.unsoldPlayers || 0}
+              value={unsoldPlayersCount}
               icon={UserX}
               variant="danger"
             />
@@ -801,21 +834,21 @@ export default function AdminDashboard() {
             <div className="p-5 rounded-2xl bg-[#18191f] border border-[#262833] shadow-lg">
               <div className="text-[10px] font-black uppercase tracking-wider text-[#8b8e99]">Total League Purse</div>
               <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-                {formatMoney(stats.totalInitialPurse)}
+                {formatMoney(totalLeaguePurse)}
               </div>
             </div>
 
             <div className="p-5 rounded-2xl bg-[#18191f] border border-[#262833] shadow-lg">
               <div className="text-[10px] font-black uppercase tracking-wider text-[#8b8e99]">Total Money Spent</div>
               <div className="text-2xl sm:text-3xl font-black text-[#ffd000] mt-1">
-                {formatMoney(stats.totalSpent)}
+                {formatMoney(totalMoneySpent)}
               </div>
             </div>
 
             <div className="p-5 rounded-2xl bg-[#18191f] border border-[#262833] shadow-lg">
               <div className="text-[10px] font-black uppercase tracking-wider text-[#8b8e99]">Total Remaining Purse</div>
               <div className="text-2xl sm:text-3xl font-black text-cyan-400 mt-1">
-                {formatMoney(stats.totalRemainingPurse)}
+                {formatMoney(totalRemainingPurse)}
               </div>
             </div>
           </div>

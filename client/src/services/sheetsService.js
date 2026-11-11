@@ -453,3 +453,21 @@ export async function sendSpectatorChat(name, message, reaction = "") {
     reaction: reaction
   });
 }
+// Add these to client/src/services/sheetsService.js
+
+export async function addTeamToSheets(teamData) {
+  return await callSheetsAPI({ action: "addTeam", team: teamData });
+}
+
+export async function addPlayerToSheets(playerData) {
+  return await callSheetsAPI({ action: "addPlayer", player: playerData });
+}
+
+export async function updateTeamPurseInSheets(teamId, newTotalPurse, newRemainingPurse) {
+  return await callSheetsAPI({
+    action: "updateTeamPurse",
+    teamId,
+    newTotalPurse,
+    newRemainingPurse
+  });
+}
