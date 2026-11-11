@@ -64,6 +64,53 @@ export function setStoredUser(user) {
 const STORAGE_KEY_STATE = 'sag_sheets_live_state';
 const STORAGE_KEY_PLAYERS = 'sag_sheets_players';
 const STORAGE_KEY_TEAMS = 'sag_sheets_teams';
+const STORAGE_KEY_CUSTOM_PLAYERS = 'sag_custom_players';
+const STORAGE_KEY_PURSE_OVERRIDES = 'sag_team_purse_overrides';
+
+export function getPurseOverrides() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PURSE_OVERRIDES);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function savePurseOverride(teamId, totalPurse, remainingPurse) {
+  try {
+    const overrides = getPurseOverrides();
+    overrides[teamId] = {
+      total_purse: Number(totalPurse),
+      remaining_purse: Number(remainingPurse != null ? remainingPurse : totalPurse),
+      updatedAt: Date.now()
+    };
+    localStorage.setItem(STORAGE_KEY_PURSE_OVERRIDES, JSON.stringify(overrides));
+  } catch {}
+}
+
+export function getCustomPlayers() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_PLAYERS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomPlayer(player) {
+  try {
+    const list = getCustomPlayers();
+    const idx = list.findIndex(
+      (p) => p.id === player.id || (p.name && player.name && p.name.trim().toLowerCase() === player.name.trim().toLowerCase())
+    );
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...player };
+    } else {
+      list.unshift(player);
+    }
+    localStorage.setItem(STORAGE_KEY_CUSTOM_PLAYERS, JSON.stringify(list));
+  } catch {}
+}
 
 function getLocalPlayers() {
   try {
@@ -95,8 +142,17 @@ function saveLocalTeams(teams) {
 
 export function normalizeTeam(t) {
   if (!t) return t;
-  const purse = t.remaining_purse != null ? Number(t.remaining_purse) : (t.remainingPurse != null ? Number(t.remainingPurse) : 200000000);
-  const total = t.total_purse != null ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : 200000000);
+  const overrides = getPurseOverrides();
+  const override = overrides[t.id];
+
+  const total = override?.total_purse != null
+    ? Number(override.total_purse)
+    : (t.total_purse != null ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : 200000000));
+
+  const purse = override?.remaining_purse != null
+    ? Number(override.remaining_purse)
+    : (t.remaining_purse != null ? Number(t.remaining_purse) : (t.remainingPurse != null ? Number(t.remainingPurse) : total));
+
   const color = t.color || t.primary_color || '#ffd000';
   return {
     ...t,
@@ -119,13 +175,40 @@ export function normalizeTeam(t) {
 export function normalizePlayer(p) {
   if (!p) return p;
   const match = DEFAULT_PLAYERS.find((x) => x.id === p.id || x.name?.trim().toLowerCase() === p.name?.trim().toLowerCase()) || {};
+  const pos = (p.primary_position || p.position || match.primary_position || match.position || 'ST').toUpperCase();
+
+  // Balanced default EA FC stat ratings tailored to position
+  let defaultSho = 75, defaultDef = 60, defaultPas = 72, defaultSpd = 75, defaultDri = 74, defaultPhy = 70;
+  if (['ST', 'CF', 'FWD'].includes(pos)) { defaultSho = 82; defaultSpd = 84; defaultDef = 42; defaultDri = 80; }
+  else if (['LW', 'RW'].includes(pos)) { defaultSho = 78; defaultSpd = 88; defaultDef = 45; defaultDri = 83; }
+  else if (['CAM', 'CM'].includes(pos)) { defaultSho = 76; defaultPas = 84; defaultSpd = 78; defaultDri = 82; defaultDef = 55; }
+  else if (['CDM'].includes(pos)) { defaultSho = 65; defaultPas = 78; defaultSpd = 74; defaultDri = 74; defaultDef = 80; defaultPhy = 80; }
+  else if (['CB'].includes(pos)) { defaultSho = 45; defaultPas = 65; defaultSpd = 72; defaultDri = 62; defaultDef = 85; defaultPhy = 84; }
+  else if (['LB', 'RB'].includes(pos)) { defaultSho = 62; defaultPas = 75; defaultSpd = 84; defaultDri = 76; defaultDef = 78; defaultPhy = 74; }
+  else if (pos === 'GK') { defaultSho = 30; defaultPas = 68; defaultSpd = 60; defaultDri = 55; defaultDef = 85; defaultPhy = 78; }
+
+  const ovr = Number(p.overall_rating || match.overall_rating || Math.round((defaultSpd + defaultSho + defaultPas + defaultDri + defaultDef + defaultPhy) / 6));
+
   return {
     ...match,
     ...p,
     id: p.id || match.id || 'p_' + Date.now(),
     name: p.name || match.name || 'Player',
-    primary_position: p.primary_position || p.position || match.primary_position || 'ST',
-    position: p.position || p.primary_position || match.position || 'ST',
+    primary_position: pos,
+    position: pos,
+    overall_rating: ovr,
+    speed_rating: Number(p.speed_rating ?? match.speed_rating ?? defaultSpd),
+    shooting_rating: Number(p.shooting_rating ?? match.shooting_rating ?? defaultSho),
+    passing_rating: Number(p.passing_rating ?? match.passing_rating ?? defaultPas),
+    dribbling_rating: Number(p.dribbling_rating ?? match.dribbling_rating ?? defaultDri),
+    defensive_rating: Number(p.defensive_rating ?? match.defensive_rating ?? defaultDef),
+    physical_rating: Number(p.physical_rating ?? match.physical_rating ?? defaultPhy),
+    preferred_foot: p.preferred_foot || match.preferred_foot || 'Right',
+    nationality: p.nationality || match.nationality || 'India',
+    badges: (Array.isArray(p.badges) && p.badges.length > 0)
+      ? p.badges
+      : (Array.isArray(match.badges) && match.badges.length > 0 ? match.badges : ['Finisher++']),
+    card_style: p.card_style || match.card_style || 'ultimate_gold',
     base_price: Number(p.base_price || p.basePrice || match.base_price || 50000),
     status: (p.status || match.status || 'available').toLowerCase(),
     auction_status: (p.auction_status || match.auction_status || (p.status === 'AVAILABLE' ? 'upcoming' : 'available')).toLowerCase(),
@@ -149,13 +232,63 @@ export async function fetchFullAuctionState() {
           status: data.liveState.status || 'idle',
         } : null;
 
-        const normPlayers = Array.isArray(data.players) && data.players.length > 0
-          ? data.players.map(normalizePlayer)
-          : getLocalPlayers().map(normalizePlayer);
+        // 1. Process and merge Teams with local purse overrides
+        const remoteTeams = Array.isArray(data.teams) ? data.teams : [];
+        const localTeams = getLocalTeams();
+        const nonDuplicateLocalTeams = localTeams.filter(
+          lt => !remoteTeams.some(rt => rt.id === lt.id || (rt.short_name && lt.short_name && rt.short_name.toUpperCase() === lt.short_name.toUpperCase()))
+        );
+        const normTeams = [
+          ...remoteTeams.map(normalizeTeam),
+          ...nonDuplicateLocalTeams.map(normalizeTeam)
+        ];
 
-        const normTeams = Array.isArray(data.teams) && data.teams.length > 0
-          ? data.teams.map(normalizeTeam)
-          : getLocalTeams().map(normalizeTeam);
+        // 2. Process and merge Players (ensuring custom registered players and card attributes persist)
+        const remotePlayers = Array.isArray(data.players) ? data.players : [];
+        const localPlayers = getLocalPlayers();
+        const customPlayers = getCustomPlayers();
+        const allKnownLocal = [...customPlayers, ...localPlayers];
+
+        const seenPlayerIds = new Set();
+        const localOnlyPlayers = [];
+
+        for (const lp of allKnownLocal) {
+          if (!lp || !lp.id) continue;
+          const lpId = String(lp.id).toLowerCase();
+          const lpName = (lp.name || '').trim().toLowerCase();
+          const existsRemote = remotePlayers.some(
+            rp => (rp.id && String(rp.id).toLowerCase() === lpId) || (rp.name && rp.name.trim().toLowerCase() === lpName)
+          );
+          if (!existsRemote && !seenPlayerIds.has(lpId)) {
+            seenPlayerIds.add(lpId);
+            localOnlyPlayers.push(lp);
+          }
+        }
+
+        const enrichedRemotePlayers = remotePlayers.map(rp => {
+          const localMatch = allKnownLocal.find(
+            lp => (lp.id && rp.id && String(lp.id).toLowerCase() === String(rp.id).toLowerCase()) ||
+                  (lp.name && rp.name && lp.name.trim().toLowerCase() === rp.name.trim().toLowerCase())
+          );
+          return normalizePlayer({
+            ...(localMatch || {}),
+            ...rp,
+            overall_rating: rp.overall_rating || localMatch?.overall_rating,
+            speed_rating: rp.speed_rating || localMatch?.speed_rating,
+            shooting_rating: rp.shooting_rating || localMatch?.shooting_rating,
+            passing_rating: rp.passing_rating || localMatch?.passing_rating,
+            dribbling_rating: rp.dribbling_rating || localMatch?.dribbling_rating,
+            defensive_rating: rp.defensive_rating || localMatch?.defensive_rating,
+            physical_rating: rp.physical_rating || localMatch?.physical_rating,
+            badges: (Array.isArray(rp.badges) && rp.badges.length > 0) ? rp.badges : localMatch?.badges,
+            photo_url: rp.photo_url || localMatch?.photo_url,
+          });
+        });
+
+        const normPlayers = [
+          ...localOnlyPlayers.map(normalizePlayer),
+          ...enrichedRemotePlayers
+        ];
 
         if (normLive) localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(normLive));
         localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(normPlayers));
@@ -165,6 +298,7 @@ export async function fetchFullAuctionState() {
           liveState: normLive,
           players: normPlayers,
           teams: normTeams,
+          chatMessages: Array.isArray(data.chatMessages) ? data.chatMessages : undefined,
         };
       }
     } catch {}
@@ -205,7 +339,7 @@ export async function fetchFullAuctionState() {
 }
 
 /**
- * Dispatches an action (placeBid, pushPlayer, markSold, markUnsold) to Google Sheets
+ * Dispatches an action (placeBid, pushPlayer, markSold, markUnsold, updateTeamPurse, addPlayer, addTeam)
  */
 export async function callSheetsAPI(payload) {
   try {
@@ -249,6 +383,30 @@ export async function callSheetsAPI(payload) {
         status: 'unsold',
       };
       localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(updated));
+    } else if (payload.action === 'updateTeamPurse') {
+      savePurseOverride(payload.teamId, payload.newTotalPurse, payload.newRemainingPurse);
+      const list = getLocalTeams();
+      const idx = list.findIndex(t => t.id === payload.teamId);
+      if (idx !== -1) {
+        list[idx].total_purse = payload.newTotalPurse;
+        list[idx].initial_purse = payload.newTotalPurse;
+        list[idx].remaining_purse = payload.newRemainingPurse != null ? payload.newRemainingPurse : payload.newTotalPurse;
+        list[idx].remainingPurse = list[idx].remaining_purse;
+        saveLocalTeams(list);
+      }
+    } else if (payload.action === 'addPlayer' && payload.player) {
+      saveCustomPlayer(payload.player);
+      const list = getLocalPlayers();
+      if (!list.some(p => p.id === payload.player.id)) {
+        list.unshift(payload.player);
+        saveLocalPlayers(list);
+      }
+    } else if (payload.action === 'addTeam' && payload.team) {
+      const list = getLocalTeams();
+      if (!list.some(t => t.id === payload.team.id)) {
+        list.push(payload.team);
+        saveLocalTeams(list);
+      }
     }
   } catch {}
 
@@ -322,13 +480,15 @@ export const playersAPI = {
   },
 
   create: async (playerData) => {
-    const list = getLocalPlayers();
-    const newPlayer = {
+    const newPlayer = normalizePlayer({
       id: playerData.id || 'p_' + Date.now(),
       ...playerData,
-    };
+    });
+    saveCustomPlayer(newPlayer);
+    const list = getLocalPlayers();
     list.unshift(newPlayer);
     saveLocalPlayers(list);
+    addPlayerToSheets(newPlayer).catch(() => {});
     return newPlayer;
   },
 
@@ -364,16 +524,17 @@ export const teamsAPI = {
 
   create: async (teamData) => {
     const list = getLocalTeams();
-    const newTeam = {
+    const newTeam = normalizeTeam({
       id: teamData.id || 'team_' + Date.now(),
       total_purse: teamData.initial_purse || 2000000,
       remaining_purse: teamData.initial_purse || 2000000,
       squad: [],
       ...teamData,
-    };
+    });
     list.push(newTeam);
     saveLocalTeams(list);
-    return normalizeTeam(newTeam);
+    addTeamToSheets(newTeam).catch(() => {});
+    return newTeam;
   },
 
   delete: async (id) => {
@@ -568,6 +729,7 @@ export const awardsAPI = {
   },
 
   fixTeamPurse: async (teamId, newPursePaise) => {
+    savePurseOverride(teamId, newPursePaise, newPursePaise);
     const list = getLocalTeams();
     const idx = list.findIndex(t => t.id === teamId);
     if (idx !== -1) {
@@ -576,10 +738,9 @@ export const awardsAPI = {
       list[idx].remaining_purse = newPursePaise;
       list[idx].remainingPurse = newPursePaise;
       saveLocalTeams(list);
-      updateTeamPurseInSheets(teamId, newPursePaise, newPursePaise).catch(() => {});
-      return list[idx];
     }
-    return null;
+    updateTeamPurseInSheets(teamId, newPursePaise, newPursePaise).catch(() => {});
+    return list[idx] || { id: teamId, total_purse: newPursePaise, remaining_purse: newPursePaise };
   }
 };
 

@@ -4,6 +4,7 @@ import { useAuction } from '../context/AuctionContext';
 import StatsCard from '../components/StatsCard';
 import AwardsPoster from '../components/AwardsPoster';
 import SpinPlayerAuction from '../components/SpinPlayerAuction';
+import PlayerCard from '../components/PlayerCard';
 import { Link } from 'react-router-dom';
 import {
   Trophy,
@@ -30,7 +31,9 @@ import {
   Search,
   Filter,
   Shuffle,
-  RotateCw
+  RotateCw,
+  Eye,
+  X
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -46,6 +49,7 @@ export default function AdminDashboard() {
   const [awards, setAwards] = useState([]);
   const [actionSuccess, setActionSuccess] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [previewPlayerCard, setPreviewPlayerCard] = useState(null);
 
   // Form states
   const [showAddTeamModal, setShowAddTeamModal] = useState(false);
@@ -194,6 +198,21 @@ export default function AdminDashboard() {
     try {
       const paiseAmount = parseInt(newPurseAmountRupees, 10) * 100;
       await awardsAPI.fixTeamPurse(fixingTeamPurse.id, paiseAmount);
+      // Immediately reflect the updated purse in state
+      setTeams((prev) =>
+        prev.map((t) =>
+          t.id === fixingTeamPurse.id
+            ? {
+                ...t,
+                initial_purse: paiseAmount,
+                total_purse: paiseAmount,
+                remaining_purse: paiseAmount,
+                remainingPurse: paiseAmount,
+                availableBiddingPurse: paiseAmount,
+              }
+            : t
+        )
+      );
       flashMessage(`Updated purse for ${fixingTeamPurse.name} to ₹${parseInt(newPurseAmountRupees, 10).toLocaleString('en-IN')}`);
       setFixingTeamPurse(null);
       loadAllData();
@@ -309,9 +328,11 @@ export default function AdminDashboard() {
       };
 
       addPlayerToSheets(newPlayerObj).catch(() => {});
-      await playersAPI.create(newPlayerObj);
+      const createdPlayer = await playersAPI.create(newPlayerObj);
+      setPlayers((prev) => [createdPlayer, ...prev.filter(p => p.id !== createdPlayer.id)]);
       flashMessage(`Player "${playerForm.name}" registered with badge "${primaryBadgeName}" automatically!`);
       setShowAddPlayerModal(false);
+      setPreviewPlayerCard(createdPlayer);
       setPlayerForm({
         name: '',
         player_number: '',
@@ -748,14 +769,24 @@ export default function AdminDashboard() {
                         </div>
                       </td>
                       <td className="p-3 text-right">
-                        <button
-                          onClick={() => {
-                            setActiveTab('badges');
-                          }}
-                          className="px-2.5 py-1 rounded bg-[#111215] hover:bg-[#22242e] text-[#ffd000] border border-[#2b2e3c] text-[10px] font-bold uppercase transition cursor-pointer"
-                        >
-                          Manage Badges
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setPreviewPlayerCard(p)}
+                            title="Preview Ultimate Player Card"
+                            className="px-2.5 py-1 rounded bg-[#ffd000]/15 hover:bg-[#ffd000]/25 text-[#ffd000] border border-[#ffd000]/30 text-[10px] font-black uppercase transition cursor-pointer flex items-center gap-1 shadow-sm"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>View Card</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActiveTab('badges');
+                            }}
+                            className="px-2 py-1 rounded bg-[#111215] hover:bg-[#22242e] text-[#8b8e99] hover:text-white border border-[#2b2e3c] text-[10px] font-bold uppercase transition cursor-pointer"
+                          >
+                            Badges
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1441,6 +1472,72 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: EA FC PLAYER CARD PREVIEW ================= */}
+      {previewPlayerCard && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#18191f] rounded-3xl p-6 max-w-md w-full border border-[#2a2d3a] shadow-2xl space-y-4 my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#262833]">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#ffd000]" />
+                <h3 className="text-base font-black text-white uppercase tracking-wider">
+                  Generated EA FC Player Card
+                </h3>
+              </div>
+              <button
+                onClick={() => setPreviewPlayerCard(null)}
+                className="w-8 h-8 rounded-xl bg-[#111215] hover:bg-[#22242d] text-[#8b8e99] hover:text-white flex items-center justify-center font-bold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex justify-center py-2">
+              <PlayerCard
+                player={previewPlayerCard}
+                size="md"
+                showPrice={true}
+                showStats={true}
+              />
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[#111215] border border-[#262833] space-y-2 text-xs font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-[#8b8e99] uppercase text-[10px]">Registered Name:</span>
+                <span className="font-bold text-white font-sans">{previewPlayerCard.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#8b8e99] uppercase text-[10px]">Playstyle Badges:</span>
+                <div className="flex items-center gap-1 flex-wrap justify-end">
+                  {Array.isArray(previewPlayerCard.badges) && previewPlayerCard.badges.length > 0 ? (
+                    previewPlayerCard.badges.map((b, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-[#ffd000]/10 border border-[#ffd000]/30 text-[#ffd000] text-[9px] font-bold">
+                        {b}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[#6b6e7a]">Finisher++</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#8b8e99] uppercase text-[10px]">Starting Base Price:</span>
+                <span className="font-black text-[#ffd000]">{formatMoney(previewPlayerCard.base_price)}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewPlayerCard(null)}
+                className="w-full py-2.5 rounded-xl bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] text-xs font-black uppercase tracking-wider shadow cursor-pointer transition text-center"
+              >
+                Done / Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}
