@@ -145,8 +145,8 @@ export default function Layout({ children }) {
 
             {/* Mobile / Tablet menu toggle */}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-md bg-[#18191f] text-[#8b8e99] hover:text-white border border-[#282a35] transition"
+              onClick={() => setMobileMenuOpen(prev => !prev)}
+              className="lg:hidden p-2 rounded-lg bg-[#18191f] text-[#8b8e99] hover:text-white border border-[#282a35] transition relative z-[60] flex items-center justify-center cursor-pointer"
               aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5 text-[#ffd000]" /> : <Menu className="w-5 h-5" />}
@@ -156,8 +156,8 @@ export default function Layout({ children }) {
 
         {/* Mobile / Tablet Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden fixed inset-x-0 top-16 bottom-0 bg-[#0c0d10]/95 backdrop-blur-xl border-t border-[#22242b] z-50 p-4 overflow-y-auto animate-in slide-in-from-top-2 flex flex-col justify-between">
-            <div className="space-y-1.5">
+          <div className="lg:hidden fixed inset-0 top-16 bg-[#0c0d10] z-50 p-4 pb-8 overflow-y-auto flex flex-col justify-between border-t border-[#22242b]">
+            <div className="space-y-2">
               {/* User Status Strip on Mobile */}
               {isAuthenticated && (
                 <div className="p-3 mb-3 rounded-xl bg-[#18191f] border border-[#282a35] flex items-center justify-between">

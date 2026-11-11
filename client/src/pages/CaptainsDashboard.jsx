@@ -149,6 +149,12 @@ export default function CaptainsDashboard() {
     }
   }, [user, teams]);
 
+  const loggedInCaptainTeamId = user?.teamId || user?.team_id;
+  const isCaptainUser = user?.role === 'captain';
+
+  // Strict ownership check: does the current activeCaptainTeamId belong to this captain?
+  const isMyAssignedTeam = isCaptainUser ? (activeCaptainTeamId === loggedInCaptainTeamId) : true;
+
   const currentHighestBid = session?.current_highest_bid || 0;
   const biddingStatus = session?.bidding_status || 'waiting';
   const incrementStep = activeIncrement || 5000;
@@ -170,7 +176,7 @@ export default function CaptainsDashboard() {
   const isBiddingActive = biddingStatus === 'open' || biddingStatus === 'active';
 
   const handleCaptainBid = async () => {
-    if (!myTeam || isLeading || !canAfford || !isBiddingActive || biddingLoading) return;
+    if (!isMyAssignedTeam || !myTeam || isLeading || !canAfford || !isBiddingActive || biddingLoading) return;
     setBiddingError(null);
     setBiddingLoading(true);
     try {
@@ -231,21 +237,39 @@ export default function CaptainsDashboard() {
         </div>
 
         {/* Captain View Switcher */}
-        <div className="flex items-center gap-1.5 bg-[#18191f] p-1.5 rounded-lg border border-[#262833]">
-          <span className="text-[10px] font-bold text-[#8b8e99] px-2 uppercase">CAPTAIN VIEW:</span>
-          {teams.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveCaptainTeamId(t.id)}
-              className={`px-3 py-1.5 rounded text-xs font-black uppercase transition-all ${
-                activeCaptainTeamId === t.id
-                  ? 'bg-[#ffd000] text-[#0a0b0d] shadow-[0_0_12px_rgba(255, 208, 0,0.3)]'
-                  : 'text-[#8b8e99] hover:text-white'
-              }`}
-            >
-              {t.short_name}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-[#18191f] p-2 rounded-xl border border-[#262833]">
+          <span className="text-[10px] font-bold text-[#8b8e99] px-1 uppercase tracking-wider">
+            {isCaptainUser ? 'FRANCHISE RADAR:' : 'CAPTAIN VIEW:'}
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            {teams.map((t) => {
+              const isUserTeam = isCaptainUser && t.id === loggedInCaptainTeamId;
+              const isSelected = activeCaptainTeamId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveCaptainTeamId(t.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#ffd000] text-[#0a0b0d] shadow-[0_0_12px_rgba(255,208,0,0.3)]'
+                      : 'text-[#8b8e99] hover:text-white bg-[#121317] border border-[#22242d]'
+                  }`}
+                >
+                  <span>{t.short_name}</span>
+                  {isUserTeam && (
+                    <span className={`text-[8px] px-1 py-0.2 rounded font-mono ${isSelected ? 'bg-black/20 text-[#0a0b0d]' : 'bg-[#ffd000]/20 text-[#ffd000]'}`}>
+                      YOU
+                    </span>
+                  )}
+                  {isCaptainUser && !isUserTeam && (
+                    <span className="text-[8px] opacity-60">
+                      (VIEW)
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -415,11 +439,20 @@ export default function CaptainsDashboard() {
 
             {/* Captain Bid Button Right — Strictly Single Step Next Option */}
             <div className="lg:col-span-4 space-y-2">
-              {isLeading ? (
+              {!isMyAssignedTeam ? (
+                <div className="py-3.5 px-4 rounded-xl bg-[#121317] border border-[#262833] text-center space-y-1">
+                  <div className="text-xs font-black text-[#8b8e99] uppercase tracking-wider">
+                    VIEW-ONLY MODE
+                  </div>
+                  <p className="text-[11px] text-[#555866]">
+                    You are viewing {myTeam?.name || 'this team'}. Only their registered captain can bid.
+                  </p>
+                </div>
+              ) : isLeading ? (
                 <div className="py-3 sm:py-3.5 px-4 rounded-xl bg-[#ffd000]/15 border-2 border-[#ffd000] text-[#ffd000] font-black text-center text-xs uppercase tracking-wider flex items-center justify-center gap-2">
                   <span>&check; You Hold Highest Bid ({formatMoney(currentHighestBid)})</span>
                 </div>
-              ) : biddingStatus !== 'open' ? (
+              ) : biddingStatus !== 'open' && biddingStatus !== 'active' ? (
                 <div className="py-3 sm:py-3.5 px-4 rounded-xl bg-[#111215] border border-[#262833] text-[#8b8e99] font-bold text-center text-xs uppercase">
                   Bidding is currently {biddingStatus}
                 </div>
