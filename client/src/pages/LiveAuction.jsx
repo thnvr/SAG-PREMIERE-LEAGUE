@@ -67,7 +67,8 @@ export default function LiveAuction() {
   const { user } = useAuth();
   const isAdminOrAuctioneer = user?.role === 'super_admin' || user?.role === 'auctioneer';
   const isCaptain = user?.role === 'captain';
-  const myTeam = isCaptain && user?.team_id ? teams.find((t) => t.id === user.team_id) : null;
+  const captainTeamId = user?.teamId || user?.team_id;
+  const myTeam = isCaptain && captainTeamId ? teams.find((t) => t.id === captainTeamId) : null;
 
   // Action authority: ONLY super_admin and auctioneer have access to the Master Command Desk
   const hasAuctionDeskAccess = isAdminOrAuctioneer;

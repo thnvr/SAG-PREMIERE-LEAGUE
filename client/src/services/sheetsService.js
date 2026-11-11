@@ -93,6 +93,46 @@ function saveLocalTeams(teams) {
   } catch {}
 }
 
+export function normalizeTeam(t) {
+  if (!t) return t;
+  const purse = t.remaining_purse != null ? Number(t.remaining_purse) : (t.remainingPurse != null ? Number(t.remainingPurse) : 200000000);
+  const total = t.total_purse != null ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : 200000000);
+  const color = t.color || t.primary_color || '#ffd000';
+  return {
+    ...t,
+    id: t.id,
+    name: t.name || 'Team',
+    short_name: t.short_name || t.shortName || t.name || 'TEAM',
+    primary_color: color,
+    color: color,
+    remaining_purse: purse,
+    remainingPurse: purse,
+    availableBiddingPurse: purse,
+    total_purse: total,
+    totalPurse: total,
+    initial_purse: total,
+    max_squad_size: t.max_squad || t.max_squad_size || 15,
+    squad: t.squad || [],
+  };
+}
+
+export function normalizePlayer(p) {
+  if (!p) return p;
+  const match = DEFAULT_PLAYERS.find((x) => x.id === p.id || x.name?.trim().toLowerCase() === p.name?.trim().toLowerCase()) || {};
+  return {
+    ...match,
+    ...p,
+    id: p.id || match.id || 'p_' + Date.now(),
+    name: p.name || match.name || 'Player',
+    primary_position: p.primary_position || p.position || match.primary_position || 'ST',
+    position: p.position || p.primary_position || match.position || 'ST',
+    base_price: Number(p.base_price || p.basePrice || match.base_price || 50000),
+    status: (p.status || match.status || 'available').toLowerCase(),
+    auction_status: (p.auction_status || match.auction_status || (p.status === 'AVAILABLE' ? 'upcoming' : 'available')).toLowerCase(),
+    photo_url: p.photo_url || match.photo_url || '',
+  };
+}
+
 /**
  * Fetches complete auction state, players, and teams from Google Sheets
  */
@@ -103,10 +143,29 @@ export async function fetchFullAuctionState() {
     try {
       const data = JSON.parse(text);
       if (data && !data.error) {
-        if (data.liveState) localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(data.liveState));
-        if (data.players) localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(data.players));
-        if (data.teams) localStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify(data.teams));
-        return data;
+        const normLive = data.liveState ? {
+          ...data.liveState,
+          currentBid: Number(data.liveState.currentBid || 0),
+          status: data.liveState.status || 'idle',
+        } : null;
+
+        const normPlayers = Array.isArray(data.players) && data.players.length > 0
+          ? data.players.map(normalizePlayer)
+          : getLocalPlayers().map(normalizePlayer);
+
+        const normTeams = Array.isArray(data.teams) && data.teams.length > 0
+          ? data.teams.map(normalizeTeam)
+          : getLocalTeams().map(normalizeTeam);
+
+        if (normLive) localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(normLive));
+        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(normPlayers));
+        localStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify(normTeams));
+
+        return {
+          liveState: normLive,
+          players: normPlayers,
+          teams: normTeams,
+        };
       }
     } catch {}
   } catch (err) {
@@ -126,8 +185,8 @@ export async function fetchFullAuctionState() {
         leadingTeamId: '',
         status: 'idle',
       },
-      players: getLocalPlayers(),
-      teams: getLocalTeams(),
+      players: getLocalPlayers().map(normalizePlayer),
+      teams: getLocalTeams().map(normalizeTeam),
     };
   } catch {
     return {
@@ -139,8 +198,8 @@ export async function fetchFullAuctionState() {
         leadingTeamId: '',
         status: 'idle',
       },
-      players: DEFAULT_PLAYERS,
-      teams: DEFAULT_TEAMS,
+      players: DEFAULT_PLAYERS.map(normalizePlayer),
+      teams: DEFAULT_TEAMS.map(normalizeTeam),
     };
   }
 }
@@ -212,15 +271,37 @@ export async function callSheetsAPI(payload) {
 // ── Players API ────────────────────────────────────────────────────────────
 export const playersAPI = {
   getAll: async (filter = {}) => {
-    let list = getLocalPlayers();
+    let list = getLocalPlayers().map(normalizePlayer);
+
+    if (filter.search) {
+      const q = String(filter.search).toLowerCase().trim();
+      list = list.filter((p) => p.name?.toLowerCase().includes(q));
+    }
+
+    if (filter.position && filter.position !== 'ALL') {
+      const pos = String(filter.position).toUpperCase();
+      list = list.filter((p) => {
+        const prim = (p.primary_position || p.position || '').toUpperCase();
+        if (pos === 'ATT' || pos === 'FWD') return ['ST', 'CF', 'LW', 'RW', 'FWD'].includes(prim);
+        if (pos === 'MID') return ['CM', 'CAM', 'CDM', 'LM', 'RM', 'MID'].includes(prim);
+        if (pos === 'DEF') return ['CB', 'LB', 'RB', 'LWB', 'RWB', 'DEF'].includes(prim);
+        if (pos === 'GK') return prim === 'GK';
+        return prim === pos;
+      });
+    }
+
     if (filter.status && filter.status !== 'ALL') {
       const s = String(filter.status).toLowerCase();
       list = list.filter((p) => {
         const pStatus = String(p.status || '').toLowerCase();
         const pAuc = String(p.auction_status || '').toLowerCase();
+        if (s === 'available') return pStatus === 'available' || pAuc === 'upcoming' || pAuc === 'available';
+        if (s === 'sold') return pStatus === 'sold' || pAuc === 'sold';
+        if (s === 'bidding') return pStatus === 'bidding' || pAuc === 'bidding';
         return pStatus === s || pAuc === s;
       });
     }
+
     return list;
   },
 
@@ -262,11 +343,11 @@ export const playersAPI = {
 // ── Teams API ──────────────────────────────────────────────────────────────
 export const teamsAPI = {
   getAll: async () => {
-    return getLocalTeams();
+    return getLocalTeams().map(normalizeTeam);
   },
 
   getById: async (id) => {
-    const list = getLocalTeams();
+    const list = getLocalTeams().map(normalizeTeam);
     return list.find((t) => t.id === id) || null;
   },
 

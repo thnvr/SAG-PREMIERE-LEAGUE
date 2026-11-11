@@ -141,8 +141,9 @@ export default function CaptainsDashboard() {
   };
 
   useEffect(() => {
-    if (user?.role === 'captain' && user?.team_id) {
-      setActiveCaptainTeamId(user.team_id);
+    const captainTeamId = user?.teamId || user?.team_id;
+    if (user?.role === 'captain' && captainTeamId) {
+      setActiveCaptainTeamId(captainTeamId);
     } else if (teams && teams.length > 0 && !teams.some((t) => t.id === activeCaptainTeamId)) {
       setActiveCaptainTeamId(teams[0].id);
     }
@@ -162,11 +163,14 @@ export default function CaptainsDashboard() {
   const nextFollowBid = nextStrictBid + incrementStep;
 
   const isLeading = myTeam && leadingTeam && myTeam.id === leadingTeam.id;
-  const availablePurse = myTeam ? (myTeam.availableBiddingPurse ?? myTeam.remainingPurse ?? 0) : 0;
+  const availablePurse = myTeam
+    ? (myTeam.availableBiddingPurse ?? myTeam.remaining_purse ?? myTeam.remainingPurse ?? 200000000)
+    : 200000000;
   const canAfford = availablePurse >= nextStrictBid;
+  const isBiddingActive = biddingStatus === 'open' || biddingStatus === 'active';
 
   const handleCaptainBid = async () => {
-    if (!myTeam || isLeading || !canAfford || biddingStatus !== 'open' || biddingLoading) return;
+    if (!myTeam || isLeading || !canAfford || !isBiddingActive || biddingLoading) return;
     setBiddingError(null);
     setBiddingLoading(true);
     try {

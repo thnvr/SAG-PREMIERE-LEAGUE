@@ -38,9 +38,10 @@ export default function BidPanel({
 
   const isLeadingBidder = myTeam && leadingTeam && myTeam.id === leadingTeam.id;
   const availablePurse = myTeam
-    ? (myTeam.availableBiddingPurse ?? myTeam.remainingPurse ?? 0)
+    ? (myTeam.availableBiddingPurse ?? myTeam.remaining_purse ?? myTeam.remainingPurse ?? 200000000)
     : 0;
   const canAffordNext = availablePurse >= nextBid;
+  const isBiddingActive = biddingStatus === 'open' || biddingStatus === 'active';
 
   const handleBid = async (amount) => {
     if (disabled || isLeadingBidder || submitting) return;
@@ -126,7 +127,7 @@ export default function BidPanel({
             <Check className="w-5 h-5" />
             You hold the highest bid!
           </div>
-        ) : biddingStatus !== 'open' ? (
+        ) : !isBiddingActive ? (
           <div className="py-4 text-center rounded-xl bg-[#111215] text-[#8b8e99] font-bold text-xs uppercase tracking-wider border border-[#262833]">
             Bidding is {biddingStatus}
           </div>
