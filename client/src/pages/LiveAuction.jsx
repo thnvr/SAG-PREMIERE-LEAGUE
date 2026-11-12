@@ -857,9 +857,12 @@ export default function LiveAuction() {
             const isExpanded = expandedTeamSquad === t.id;
             const squad = t.squad || [];
             const isMyTeam = isCaptain && myTeam && t.id === myTeam.id;
-            const remainingPct = t.initialPurse > 0
-              ? Math.round((t.remainingPurse / t.initialPurse) * 100)
-              : 0;
+            const initialPurse = Number(t.total_purse ?? t.initial_purse ?? t.totalPurse ?? t.initialPurse ?? 0);
+            const remainingPurse = Number(t.remaining_purse ?? t.remainingPurse ?? initialPurse);
+            const totalSpent = Math.max(0, initialPurse - remainingPurse);
+            const remainingPct = initialPurse > 0
+              ? Math.round((remainingPurse / initialPurse) * 100)
+              : 100;
 
             return (
               <div
@@ -907,11 +910,11 @@ export default function LiveAuction() {
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono py-2 border-t border-b border-[#262833] mb-2">
                   <div>
                     <span className="text-[9px] text-[#8b8e99] uppercase block">Spent</span>
-                    <span className="text-white font-bold">{formatMoney(t.totalSpent)}</span>
+                    <span className="text-white font-bold">{formatMoney(totalSpent)}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-[#8b8e99] uppercase block">Remaining</span>
-                    <span className="text-[#ffd000] font-black">{formatMoney(t.remainingPurse)}</span>
+                    <span className="text-[#ffd000] font-black">{formatMoney(remainingPurse)}</span>
                   </div>
                 </div>
 
@@ -1024,7 +1027,7 @@ export default function LiveAuction() {
                     {/* Show distinct teams who bid on current player */}
                     {[...new Map((recentBids || []).map((b) => [b.team_id, b])).values()].map((b) => {
                       const t = teams.find((tm) => tm.id === b.team_id);
-                      const isLeading = b.team_id === session?.current_highest_team_id;
+                      const isLeading = b.team_id === session?.leading_team_id;
                       return (
                         <option key={b.team_id} value={b.team_id}>
                           {t?.name || b.team_name} — Highest Bid: {formatMoney(b.amount)} {isLeading ? '(Current Leader)' : '(Losing Bid)'}

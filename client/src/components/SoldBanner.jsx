@@ -7,7 +7,7 @@ export default function SoldBanner({ sale, onClose }) {
 
   const player = sale.player || {};
   const team = sale.team || {};
-  const price = sale.price || 0;
+  const price = sale.amount || sale.price || 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-lg animate-in fade-in duration-300">

@@ -498,6 +498,19 @@ export const playersAPI = {
     saveLocalPlayers(updated);
     return true;
   },
+
+  updateShortlist: async (playerIds, shortlistedValue) => {
+    if (!Array.isArray(playerIds) || playerIds.length === 0) return true;
+    const list = getLocalPlayers();
+    playerIds.forEach(id => {
+      const idx = list.findIndex(p => p.id === id);
+      if (idx !== -1) {
+        list[idx].is_shortlisted = shortlistedValue;
+      }
+    });
+    saveLocalPlayers(list);
+    return true;
+  },
 };
 
 // ── Teams API ──────────────────────────────────────────────────────────────
@@ -572,6 +585,68 @@ export const auctionAPI = {
   nominate: async (playerId, basePrice) => {
     const player = await playersAPI.getById(playerId);
     return callSheetsAPI({ action: 'pushPlayer', player });
+  },
+
+  applyTaxDeduction: async ({ teamId, percentage, bidAmount }) => {
+    if (!teamId || !percentage || !bidAmount) {
+      throw new Error('Invalid tax parameters');
+    }
+    const taxAmt = Math.round((Number(bidAmount) * Number(percentage)) / 100);
+    const list = getLocalTeams();
+    const idx = list.findIndex(t => t.id === teamId);
+    if (idx === -1) {
+      throw new Error('Team not found');
+    }
+    const currentPurse = Number(list[idx].remaining_purse ?? list[idx].remainingPurse ?? list[idx].total_purse ?? 0);
+    const newPurse = Math.max(0, currentPurse - taxAmt);
+    list[idx].remaining_purse = newPurse;
+    list[idx].remainingPurse = newPurse;
+    list[idx].availableBiddingPurse = newPurse;
+    saveLocalTeams(list);
+    savePurseOverride(teamId, list[idx].total_purse || list[idx].initial_purse || 0, newPurse);
+    // Fire off to Google Sheets
+    updateTeamPurseInSheets(teamId, list[idx].total_purse || list[idx].initial_purse || 0, newPurse).catch(() => {});
+    return {
+      success: true,
+      taxAmt,
+      newPurse,
+      formattedDeducted: formatMoney(taxAmt),
+      formattedNewPurse: formatMoney(newPurse),
+    };
+  },
+
+  kickPlayer: async ({ playerId, teamId }) => {
+    if (!playerId || !teamId) throw new Error('Invalid kick parameters');
+    // Find player
+    const playerList = getLocalPlayers();
+    const pIdx = playerList.findIndex(p => p.id === playerId);
+    let refundAmt = 0;
+    if (pIdx !== -1) {
+      refundAmt = Number(playerList[pIdx].purchase_price || playerList[pIdx].sold_price || 0);
+      // Reset player status back to available
+      playerList[pIdx].status = 'available';
+      playerList[pIdx].auction_status = 'upcoming';
+      playerList[pIdx].sold_to_team_id = null;
+      playerList[pIdx].purchase_price = null;
+      playerList[pIdx].sold_price = null;
+      saveLocalPlayers(playerList);
+    }
+    // Refund purse to team and remove from squad
+    const teamList = getLocalTeams();
+    const tIdx = teamList.findIndex(t => t.id === teamId);
+    if (tIdx !== -1) {
+      const prevPurse = Number(teamList[tIdx].remaining_purse ?? teamList[tIdx].remainingPurse ?? 0);
+      const newPurse = prevPurse + refundAmt;
+      teamList[tIdx].remaining_purse = newPurse;
+      teamList[tIdx].remainingPurse = newPurse;
+      teamList[tIdx].availableBiddingPurse = newPurse;
+      teamList[tIdx].squad = (teamList[tIdx].squad || []).filter(p => p.id !== playerId);
+      saveLocalTeams(teamList);
+      savePurseOverride(teamId, teamList[tIdx].total_purse || teamList[tIdx].initial_purse || 0, newPurse);
+      updateTeamPurseInSheets(teamId, teamList[tIdx].total_purse || teamList[tIdx].initial_purse || 0, newPurse).catch(() => {});
+    }
+    callSheetsAPI({ action: 'kickPlayer', playerId, teamId }).catch(() => {});
+    return { success: true, refundAmt, formattedRefund: formatMoney(refundAmt) };
   },
 };
 

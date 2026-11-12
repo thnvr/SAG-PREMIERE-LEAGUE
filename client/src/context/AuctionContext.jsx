@@ -5,6 +5,7 @@ import {
   callSheetsAPI,
   normalizeTeam,
   normalizePlayer,
+  savePurseOverride,
   DEFAULT_TEAMS
 } from '../services/sheetsService';
 import { DEFAULT_PLAYERS } from '../data/defaultPlayers';
@@ -170,7 +171,57 @@ export const AuctionProvider = ({ children }) => {
     setLiveState((prev) => ({
       ...prev,
       status: 'sold',
+      finalAmount: amount,
+      winningTeamId: teamId,
     }));
+
+    // Update players list: mark sold player as sold with sold price
+    if (currentPlayer) {
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.id === currentPlayer.id
+            ? {
+                ...p,
+                status: 'sold',
+                auction_status: 'sold',
+                sold_price: amount,
+                sold_to_team_id: teamId,
+                purchase_price: amount,
+              }
+            : p
+        )
+      );
+    }
+
+    // Update teams: deduct from winning team purse + add player to squad
+    if (teamId && amount > 0) {
+      setTeams((prev) =>
+        prev.map((t) => {
+          if (t.id !== teamId) return t;
+          const prevPurse = Number(t.remaining_purse ?? t.remainingPurse ?? t.total_purse ?? 0);
+          const newPurse = Math.max(0, prevPurse - Number(amount));
+          const soldPlayer = {
+            ...(currentPlayer || {}),
+            purchase_price: amount,
+            sold_price: amount,
+            primary_position: currentPlayer?.primary_position || currentPlayer?.position || 'FWD',
+          };
+          const squad = Array.isArray(t.squad) ? t.squad : [];
+          const updatedSquad = squad.some((sp) => sp.id === soldPlayer.id)
+            ? squad.map((sp) => (sp.id === soldPlayer.id ? soldPlayer : sp))
+            : [...squad, soldPlayer];
+          // Persist to localStorage override
+          savePurseOverride(t.id, t.total_purse || t.initial_purse || 0, newPurse);
+          return {
+            ...t,
+            remaining_purse: newPurse,
+            remainingPurse: newPurse,
+            availableBiddingPurse: newPurse,
+            squad: updatedSquad,
+          };
+        })
+      );
+    }
 
     const res = await callSheetsAPI({ action: 'markSold', winningTeamId: teamId, finalAmount: amount });
     return res;
