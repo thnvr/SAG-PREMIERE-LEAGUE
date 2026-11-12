@@ -4,6 +4,23 @@
  */
 import { DEFAULT_PLAYERS } from '../data/defaultPlayers';
 
+
+// Universal Cross-Tab & Cross-Device Event Synchronization
+export const auctionBroadcast = typeof window !== 'undefined' && window.BroadcastChannel
+  ? new BroadcastChannel('sag_auction_channel')
+  : null;
+
+export function broadcastAuctionUpdate(type, data = {}) {
+  try {
+    if (auctionBroadcast) {
+      auctionBroadcast.postMessage({ type, data, timestamp: Date.now() });
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('sag_auction_sync_pulse', String(Date.now()));
+    }
+  } catch {}
+}
+
 export const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbwArNDQQMX7G0Kze_Evr3NHCKlIAKla0LyLGY5TuaFG63neI8WLqYd20OVebs1ttj8R/exec";
 
 export const DEFAULT_TEAMS = [
@@ -148,7 +165,7 @@ export function saveCustomPlayer(player) {
   } catch {}
 }
 
-function getLocalPlayers() {
+export function getLocalPlayers() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PLAYERS);
     if (raw) return JSON.parse(raw);
@@ -162,7 +179,7 @@ function saveLocalPlayers(players) {
   } catch {}
 }
 
-function getLocalTeams() {
+export function getLocalTeams() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_TEAMS);
     if (raw) return JSON.parse(raw);
@@ -181,9 +198,15 @@ export function normalizeTeam(t, playersList = null) {
   const overrides = getPurseOverrides();
   const override = overrides[t.id];
 
-  const total = override?.total_purse != null
+  // Raw total purse resolution
+  let rawTotal = override?.total_purse != null
     ? Number(override.total_purse)
-    : (t.total_purse != null ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : 200000000));
+    : (t.total_purse != null && t.total_purse !== '' ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : (t.purse != null ? Number(t.purse) : (t.initial_purse != null ? Number(t.initial_purse) : 200000000))));
+
+  // If rawTotal was entered as rupees (e.g. 8000, 20000, 50000 < 100000), convert to paise (*100)
+  if (rawTotal > 0 && rawTotal < 100000) {
+    rawTotal = rawTotal * 100;
+  }
 
   const players = playersList || getLocalPlayers();
   // Find all players signed to this team
@@ -210,20 +233,22 @@ export function normalizeTeam(t, playersList = null) {
   }
   const fullSquad = Array.from(mergedSquadMap.values());
 
-  // Calculate actual total spent on squad
+  // Calculate actual total spent on squad in paise
   const squadTotalSpent = fullSquad.reduce((sum, sp) => sum + Number(sp.purchase_price || sp.sold_price || 0), 0);
 
-  // If override exists, use override remaining purse; otherwise deduct squadTotalSpent from total
-  let purse = override?.remaining_purse != null
+  // If override remaining purse exists, use it; otherwise compute rawTotal - squadTotalSpent
+  let remaining = override?.remaining_purse != null
     ? Number(override.remaining_purse)
-    : (t.remaining_purse != null && t.remaining_purse !== '' ? Number(t.remaining_purse) : (total - squadTotalSpent));
+    : (t.remaining_purse != null && t.remaining_purse !== '' ? Number(t.remaining_purse) : (rawTotal - squadTotalSpent));
 
-  // If remote sheets sent remaining_purse equal to total but we have a non-empty squad, ensure spent is deducted
-  if (purse === total && squadTotalSpent > 0 && override?.remaining_purse == null) {
-    purse = Math.max(0, total - squadTotalSpent);
+  // If remaining purse was also in rupees without squad deduction, scale it
+  if (remaining > 0 && remaining < 100000 && squadTotalSpent === 0) {
+    remaining = remaining * 100;
   }
 
-  const spent = Math.max(0, total - purse);
+  // Ensure remaining purse never exceeds total purse, and reflects actual squad deductions
+  const finalRemaining = Math.max(0, Math.min(rawTotal, rawTotal - squadTotalSpent));
+  const spent = squadTotalSpent;
   const color = t.color || t.primary_color || '#ffd000';
 
   return {
@@ -233,13 +258,13 @@ export function normalizeTeam(t, playersList = null) {
     short_name: t.short_name || t.shortName || t.name || 'TEAM',
     primary_color: color,
     color: color,
-    remaining_purse: purse,
-    remainingPurse: purse,
-    availableBiddingPurse: purse,
-    total_purse: total,
-    totalPurse: total,
-    initial_purse: total,
-    initialPurse: total,
+    remaining_purse: finalRemaining,
+    remainingPurse: finalRemaining,
+    availableBiddingPurse: finalRemaining,
+    total_purse: rawTotal,
+    totalPurse: rawTotal,
+    initial_purse: rawTotal,
+    initialPurse: rawTotal,
     totalSpent: spent,
     playersPurchased: fullSquad.length,
     max_squad_size: t.max_squad || t.max_squad_size || 15,
@@ -426,6 +451,9 @@ export async function fetchFullAuctionState() {
  * Dispatches an action (placeBid, pushPlayer, markSold, markUnsold, updateTeamPurse, addPlayer, addTeam)
  */
 export async function callSheetsAPI(payload) {
+  try {
+    broadcastAuctionUpdate('auction_sync', payload);
+  } catch {}
   try {
     if (payload.action === 'pushPlayer' && payload.player) {
       const live = {

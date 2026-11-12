@@ -368,6 +368,15 @@ export default function LiveAuction() {
             </span>
           </div>
 
+          {/* Captains War Room Link */}
+          <Link
+            to="/captains-dashboard"
+            className="px-3 py-1.5 rounded-md bg-[#18191f] hover:bg-[#23252d] border border-[#ffd000]/40 text-[#ffd000] text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span>Captains Desk</span>
+          </Link>
+
           {/* Available Pool Button */}
           <button
             onClick={() => setShowAvailablePoolDrawer(true)}

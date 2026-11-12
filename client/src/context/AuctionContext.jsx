@@ -37,6 +37,78 @@ export const AuctionProvider = ({ children }) => {
   });
   const [chatMessages, setChatMessages] = useState([]);
 
+  // Instant Cross-Tab & Cross-Device Sync (Storage & BroadcastChannel)
+  useEffect(() => {
+    // sag_auction_channel_listener
+    const handleBroadcast = (event) => {
+      if (event?.data?.type === 'auction_sync') {
+        const payload = event.data.data;
+        if (!payload) return;
+        if (payload.action === 'pushPlayer' && payload.player) {
+          const bp = payload.player.base_price || payload.player.basePrice || 50000;
+          setLiveState({
+            playerId: payload.player.id || '',
+            playerName: payload.player.name || '',
+            currentBid: bp,
+            highestBidder: 'No Bids Yet',
+            leadingTeamId: '',
+            status: 'active',
+            player: payload.player,
+          });
+          setCountdown(30);
+        } else if (payload.action === 'placeBid') {
+          setLiveState((prev) => ({
+            ...prev,
+            currentBid: payload.bidAmount,
+            highestBidder: payload.teamName || prev.highestBidder,
+            leadingTeamId: payload.teamId,
+            status: 'active',
+          }));
+          setCountdown(25);
+        } else if (payload.action === 'markSold') {
+          setLiveState((prev) => ({
+            ...prev,
+            status: 'sold',
+            winningTeamId: payload.winningTeamId,
+            finalAmount: payload.finalAmount,
+          }));
+        } else if (payload.action === 'markUnsold') {
+          setLiveState((prev) => ({
+            ...prev,
+            status: 'unsold',
+          }));
+        }
+      }
+    };
+
+    const handleStorage = (e) => {
+      if (e.key === 'sag_auction_state' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setLiveState(parsed);
+        } catch {}
+      } else if (e.key === 'sag_recent_bids' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setRecentBids(parsed);
+        } catch {}
+      }
+    };
+
+    if (auctionBroadcast) {
+      auctionBroadcast.addEventListener('message', handleBroadcast);
+    }
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      if (auctionBroadcast) {
+        auctionBroadcast.removeEventListener('message', handleBroadcast);
+      }
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+
   // Poll Google Sheets every 1.5 seconds for real-time updates across screens
   useEffect(() => {
     let mounted = true;

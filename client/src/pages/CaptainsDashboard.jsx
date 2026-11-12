@@ -162,9 +162,17 @@ export default function CaptainsDashboard() {
   const myTeam = teams.find((t) => t.id === activeCaptainTeamId) || teams[0];
   const rivalTeams = teams.filter((t) => t.id !== activeCaptainTeamId);
 
-  // Strict next single bid calculation: only allowed to raise by auctioneer step
-  const nextStrictBid = currentHighestBid === 0
-    ? (currentPlayer?.base_price || 10000)
+  // Strict next single bid calculation:
+  // If no team has placed a bid yet (leadingTeam is null or highestBidder is 'No Bids Yet'),
+  // the opening bid should be the base price (or current base bid), NOT base + increment.
+  const hasExistingBid = Boolean(
+    leadingTeam &&
+    session?.leading_team_id &&
+    session?.current_highest_bid > 0
+  );
+
+  const nextStrictBid = !hasExistingBid
+    ? (currentPlayer?.base_price || session?.current_highest_bid || 10000)
     : currentHighestBid + incrementStep;
   const nextFollowBid = nextStrictBid + incrementStep;
 
@@ -225,8 +233,20 @@ export default function CaptainsDashboard() {
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#22242b]">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-[#18191f] border border-[#2a2d38] text-[#ffd000] font-mono text-xs font-bold mb-2">
-            <span>●</span> CAPTAINS STRATEGY WAR ROOM
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-[#18191f] border border-[#2a2d38] text-[#ffd000] font-mono text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE CONNECTED TO AUCTIONEER DESK</span>
+            </div>
+            {user?.role === 'auctioneer' || user?.role === 'super_admin' ? (
+              <span className="px-2.5 py-1 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-mono text-xs font-bold">
+                ⚡ AUCTIONEER OVERSEER MODE
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 rounded bg-[#ffd000]/15 border border-[#ffd000]/30 text-[#ffd000] font-mono text-xs font-bold">
+                CAPTAIN: {myTeam?.name || 'Franchise'}
+              </span>
+            )}
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">
             Franchise Tactical Intelligence
@@ -236,39 +256,50 @@ export default function CaptainsDashboard() {
           </p>
         </div>
 
-        {/* Captain View Switcher */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-[#18191f] p-2 rounded-xl border border-[#262833]">
-          <span className="text-[10px] font-bold text-[#8b8e99] px-1 uppercase tracking-wider">
-            {isCaptainUser ? 'FRANCHISE RADAR:' : 'CAPTAIN VIEW:'}
-          </span>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {teams.map((t) => {
-              const isUserTeam = isCaptainUser && t.id === loggedInCaptainTeamId;
-              const isSelected = activeCaptainTeamId === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveCaptainTeamId(t.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isSelected
-                      ? 'bg-[#ffd000] text-[#0a0b0d] shadow-[0_0_12px_rgba(255,208,0,0.3)]'
-                      : 'text-[#8b8e99] hover:text-white bg-[#121317] border border-[#22242d]'
-                  }`}
-                >
-                  <span>{t.short_name}</span>
-                  {isUserTeam && (
-                    <span className={`text-[8px] px-1 py-0.2 rounded font-mono ${isSelected ? 'bg-black/20 text-[#0a0b0d]' : 'bg-[#ffd000]/20 text-[#ffd000]'}`}>
-                      YOU
-                    </span>
-                  )}
-                  {isCaptainUser && !isUserTeam && (
-                    <span className="text-[8px] opacity-60">
-                      (VIEW)
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          {/* Quick jump to Auction Arena */}
+          <Link
+            to="/auction"
+            className="px-4 py-2.5 rounded-xl bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(255,208,0,0.3)] transition flex items-center justify-center gap-2"
+          >
+            <Gavel className="w-4 h-4" />
+            <span>Enter Auction Arena</span>
+          </Link>
+
+          {/* Captain View Switcher */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-[#18191f] p-2 rounded-xl border border-[#262833]">
+            <span className="text-[10px] font-bold text-[#8b8e99] px-1 uppercase tracking-wider">
+              {isCaptainUser ? 'FRANCHISE RADAR:' : 'CAPTAIN VIEW:'}
+            </span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {teams.map((t) => {
+                const isUserTeam = isCaptainUser && t.id === loggedInCaptainTeamId;
+                const isSelected = activeCaptainTeamId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveCaptainTeamId(t.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#ffd000] text-[#0a0b0d] shadow-[0_0_12px_rgba(255,208,0,0.3)]'
+                        : 'text-[#8b8e99] hover:text-white bg-[#121317] border border-[#22242d]'
+                    }`}
+                  >
+                    <span>{t.short_name}</span>
+                    {isUserTeam && (
+                      <span className={`text-[8px] px-1 py-0.2 rounded font-mono ${isSelected ? 'bg-black/20 text-[#0a0b0d]' : 'bg-[#ffd000]/20 text-[#ffd000]'}`}>
+                        YOU
+                      </span>
+                    )}
+                    {isCaptainUser && !isUserTeam && (
+                      <span className="text-[8px] opacity-60">
+                        (VIEW)
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -468,7 +499,7 @@ export default function CaptainsDashboard() {
                 >
                   <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                   <span className="truncate">
-                    {biddingLoading ? 'Submitting...' : currentHighestBid === 0
+                    {biddingLoading ? 'Submitting...' : !hasExistingBid
                       ? `OPEN BID AT ${formatMoney(nextStrictBid)}`
                       : `RAISE BID TO ${formatMoney(nextStrictBid)} (+${formatMoney(incrementStep)})`}
                   </span>
