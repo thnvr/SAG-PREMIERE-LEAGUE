@@ -31,9 +31,15 @@ class ErrorBoundary extends React.Component {
           <h1 className="text-2xl font-black text-[#ffd000] uppercase tracking-tight mb-2">
             SAG PREMIERE LEAGUE
           </h1>
-          <p className="text-sm text-[#8b8e99] max-w-md mb-6">
+          <p className="text-sm text-[#8b8e99] max-w-md mb-4">
             An unexpected error occurred while loading. Click below to reload.
           </p>
+          {this.state.error && (
+            <div className="mb-6 p-4 rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-300 text-xs font-mono max-w-xl text-left overflow-auto max-h-48">
+              <div className="font-bold text-rose-400 mb-1">{this.state.error.toString()}</div>
+              <pre className="text-[10px] text-rose-300/80 whitespace-pre-wrap">{this.state.error.stack}</pre>
+            </div>
+          )}
           <div className="flex gap-4">
             <button
               onClick={() => window.location.reload()}
