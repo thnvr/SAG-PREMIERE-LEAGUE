@@ -140,7 +140,7 @@ function saveLocalTeams(teams) {
   } catch {}
 }
 
-export function normalizeTeam(t) {
+export function normalizeTeam(t, playersList = null) {
   if (!t) return t;
   const overrides = getPurseOverrides();
   const override = overrides[t.id];
@@ -149,11 +149,47 @@ export function normalizeTeam(t) {
     ? Number(override.total_purse)
     : (t.total_purse != null ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : 200000000));
 
-  const purse = override?.remaining_purse != null
-    ? Number(override.remaining_purse)
-    : (t.remaining_purse != null ? Number(t.remaining_purse) : (t.remainingPurse != null ? Number(t.remainingPurse) : total));
+  const players = playersList || getLocalPlayers();
+  // Find all players signed to this team
+  const signedPlayers = (Array.isArray(players) ? players : []).filter(
+    (p) => (p.sold_to_team_id === t.id || p.team_id === t.id) &&
+           (String(p.status || '').toLowerCase() === 'sold' || String(p.auction_status || '').toLowerCase() === 'sold')
+  ).map((p) => ({
+    ...p,
+    id: p.id,
+    name: p.name,
+    primary_position: p.primary_position || p.position || 'FWD',
+    purchase_price: Number(p.sold_price || p.purchase_price || p.finalAmount || p.base_price || 0),
+    sold_price: Number(p.sold_price || p.purchase_price || p.finalAmount || p.base_price || 0),
+  }));
 
+  // Merge any squad already on t with signed players
+  const existingSquad = Array.isArray(t.squad) ? t.squad : [];
+  const mergedSquadMap = new Map();
+  for (const sp of existingSquad) {
+    if (sp && sp.id) mergedSquadMap.set(sp.id, sp);
+  }
+  for (const sp of signedPlayers) {
+    if (sp && sp.id) mergedSquadMap.set(sp.id, sp);
+  }
+  const fullSquad = Array.from(mergedSquadMap.values());
+
+  // Calculate actual total spent on squad
+  const squadTotalSpent = fullSquad.reduce((sum, sp) => sum + Number(sp.purchase_price || sp.sold_price || 0), 0);
+
+  // If override exists, use override remaining purse; otherwise deduct squadTotalSpent from total
+  let purse = override?.remaining_purse != null
+    ? Number(override.remaining_purse)
+    : (t.remaining_purse != null && t.remaining_purse !== '' ? Number(t.remaining_purse) : (total - squadTotalSpent));
+
+  // If remote sheets sent remaining_purse equal to total but we have a non-empty squad, ensure spent is deducted
+  if (purse === total && squadTotalSpent > 0 && override?.remaining_purse == null) {
+    purse = Math.max(0, total - squadTotalSpent);
+  }
+
+  const spent = Math.max(0, total - purse);
   const color = t.color || t.primary_color || '#ffd000';
+
   return {
     ...t,
     id: t.id,
@@ -167,8 +203,11 @@ export function normalizeTeam(t) {
     total_purse: total,
     totalPurse: total,
     initial_purse: total,
+    initialPurse: total,
+    totalSpent: spent,
+    playersPurchased: fullSquad.length,
     max_squad_size: t.max_squad || t.max_squad_size || 15,
-    squad: t.squad || [],
+    squad: fullSquad,
   };
 }
 
@@ -232,18 +271,7 @@ export async function fetchFullAuctionState() {
           status: data.liveState.status || 'idle',
         } : null;
 
-        // 1. Process and merge Teams with local purse overrides
-        const remoteTeams = Array.isArray(data.teams) ? data.teams : [];
-        const localTeams = getLocalTeams();
-        const nonDuplicateLocalTeams = localTeams.filter(
-          lt => !remoteTeams.some(rt => rt.id === lt.id || (rt.short_name && lt.short_name && rt.short_name.toUpperCase() === lt.short_name.toUpperCase()))
-        );
-        const normTeams = [
-          ...remoteTeams.map(normalizeTeam),
-          ...nonDuplicateLocalTeams.map(normalizeTeam)
-        ];
-
-        // 2. Process and merge Players (ensuring custom registered players and card attributes persist)
+        // 1. Process and merge Players (ensuring custom registered players and card attributes persist)
         const remotePlayers = Array.isArray(data.players) ? data.players : [];
         const localPlayers = getLocalPlayers();
         const customPlayers = getCustomPlayers();
@@ -288,6 +316,17 @@ export async function fetchFullAuctionState() {
         const normPlayers = [
           ...localOnlyPlayers.map(normalizePlayer),
           ...enrichedRemotePlayers
+        ];
+
+        // 2. Process and merge Teams with local purse overrides AND enriched squads
+        const remoteTeams = Array.isArray(data.teams) ? data.teams : [];
+        const localTeams = getLocalTeams();
+        const nonDuplicateLocalTeams = localTeams.filter(
+          lt => !remoteTeams.some(rt => rt.id === lt.id || (rt.short_name && lt.short_name && rt.short_name.toUpperCase() === lt.short_name.toUpperCase()))
+        );
+        const normTeams = [
+          ...remoteTeams.map(rt => normalizeTeam(rt, normPlayers)),
+          ...nonDuplicateLocalTeams.map(lt => normalizeTeam(lt, normPlayers))
         ];
 
         if (normLive) localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(normLive));
@@ -453,7 +492,9 @@ export const playersAPI = {
       list = list.filter((p) => {
         const pStatus = String(p.status || '').toLowerCase();
         const pAuc = String(p.auction_status || '').toLowerCase();
-        if (s === 'available') return pStatus === 'available' || pAuc === 'upcoming' || pAuc === 'available';
+        if (s === 'available' || s === 'upcoming') {
+          return pStatus !== 'sold' && pAuc !== 'sold';
+        }
         if (s === 'sold') return pStatus === 'sold' || pAuc === 'sold';
         if (s === 'bidding') return pStatus === 'bidding' || pAuc === 'bidding';
         return pStatus === s || pAuc === s;
@@ -647,6 +688,27 @@ export const auctionAPI = {
     }
     callSheetsAPI({ action: 'kickPlayer', playerId, teamId }).catch(() => {});
     return { success: true, refundAmt, formattedRefund: formatMoney(refundAmt) };
+  },
+
+  getHistory: async () => {
+    const players = getLocalPlayers();
+    const teams = getLocalTeams();
+    const sold = players.filter(p => p.status === 'sold' || p.auction_status === 'sold');
+    return sold.map((p, idx) => {
+      const t = teams.find(tm => tm.id === (p.sold_to_team_id || p.team_id));
+      const price = Number(p.sold_price || p.purchase_price || p.finalAmount || p.base_price || 50000);
+      return {
+        id: p.id || 'hist_' + idx,
+        transaction_number: 'TX-' + String(p.id || idx).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase(),
+        player_name: p.name,
+        primary_position: p.primary_position || p.position || 'FWD',
+        team_name: t?.name || 'Franchise',
+        team_color: t?.primary_color || t?.color || '#ffd000',
+        base_price: Number(p.base_price || 50000),
+        purchase_price: price,
+        created_at: p.sold_at || p.updated_at || new Date().toISOString(),
+      };
+    });
   },
 };
 

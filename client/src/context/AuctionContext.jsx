@@ -27,7 +27,14 @@ export const AuctionProvider = ({ children }) => {
   const [activeIncrement, setActiveIncrement] = useState(5000);
   const [countdown, setCountdown] = useState(30);
   const [soldAnimation, setSoldAnimation] = useState(null);
-  const [recentBids, setRecentBids] = useState([]);
+  const [recentBids, setRecentBids] = useState(() => {
+    try {
+      const raw = localStorage.getItem('sag_recent_bids');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [chatMessages, setChatMessages] = useState([]);
 
   // Poll Google Sheets every 1.5 seconds for real-time updates across screens
@@ -39,6 +46,41 @@ export const AuctionProvider = ({ children }) => {
         const data = await fetchFullAuctionState();
         if (data && !data.error && mounted) {
           if (data.liveState) {
+            // Sync incoming live bids into recentBids stream
+            if (
+              data.liveState.currentBid > 0 &&
+              data.liveState.highestBidder &&
+              data.liveState.highestBidder !== 'No Bids Yet'
+            ) {
+              setRecentBids((prev) => {
+                const exists = prev.some(
+                  (b) =>
+                    Number(b.amount) === Number(data.liveState.currentBid) &&
+                    (b.team_id === data.liveState.leadingTeamId || b.team_name === data.liveState.highestBidder)
+                );
+                if (exists) return prev;
+                const curTeams = data.teams && data.teams.length > 0 ? data.teams : teams;
+                const found = curTeams.find(
+                  (t) => t.id === data.liveState.leadingTeamId || t.name === data.liveState.highestBidder
+                );
+                const newEntry = {
+                  id: 'bid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                  bid_number: prev.length + 1,
+                  team_id: data.liveState.leadingTeamId || found?.id || '',
+                  team_name: data.liveState.highestBidder,
+                  team_short: found?.short_name || found?.shortName || data.liveState.highestBidder,
+                  team_color: found?.primary_color || found?.color || '#ffd000',
+                  bidder_name: found?.captain_name || data.liveState.highestBidder,
+                  amount: Number(data.liveState.currentBid),
+                  created_at: data.liveState.updatedAt || new Date().toISOString(),
+                };
+                const updated = [newEntry, ...prev].slice(0, 30);
+                try {
+                  localStorage.setItem('sag_recent_bids', JSON.stringify(updated));
+                } catch {}
+                return updated;
+              });
+            }
             setLiveState((prev) => {
               // If new bid arrived from another device, reset timer
               if (
@@ -116,16 +158,25 @@ export const AuctionProvider = ({ children }) => {
       status: 'active',
     }));
 
-    setRecentBids((prev) => [
-      {
-        id: 'bid_' + Date.now(),
-        team_id: teamId,
-        team_name: teamName,
-        amount,
-        created_at: new Date().toISOString(),
-      },
-      ...prev.slice(0, 19),
-    ]);
+    const foundTeam = teams.find((t) => t.id === teamId || t.name === teamName);
+    const bidItem = {
+      id: 'bid_' + Date.now(),
+      bid_number: recentBids.length + 1,
+      team_id: teamId,
+      team_name: teamName,
+      team_short: foundTeam?.short_name || foundTeam?.shortName || teamName,
+      team_color: foundTeam?.primary_color || foundTeam?.color || '#ffd000',
+      bidder_name: foundTeam?.captain_name || teamName,
+      amount,
+      created_at: new Date().toISOString(),
+    };
+    setRecentBids((prev) => {
+      const updated = [bidItem, ...prev].slice(0, 30);
+      try {
+        localStorage.setItem('sag_recent_bids', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
 
     const res = await callSheetsAPI({ action: 'placeBid', teamId, teamName, bidAmount: amount });
     return res;

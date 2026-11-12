@@ -41,7 +41,8 @@ export default function Layout({ children }) {
     { label: 'LIVE AUCTION', path: '/auction', icon: Gavel },
     { label: 'PLAYERS', path: '/players', icon: Users },
     { label: 'SPECTATOR TV', path: '/spectator', icon: Cast },
-    { label: 'RESULTS', path: '/history', icon: History },
+    { label: 'RESULTS', path: '/results', icon: Trophy },
+    { label: 'HISTORY', path: '/history', icon: History },
   ];
 
   return (

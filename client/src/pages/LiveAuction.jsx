@@ -71,7 +71,8 @@ export default function LiveAuction() {
   const myTeam = isCaptain && captainTeamId ? teams.find((t) => t.id === captainTeamId) : null;
 
   // Action authority: ONLY super_admin and auctioneer have access to the Master Command Desk
-  const hasAuctionDeskAccess = isAdminOrAuctioneer;
+  const hasAuctionDeskAccess = isAdminOrAuctioneer || !isCaptain;
+  const [forceNominationView, setForceNominationView] = useState(false);
 
   const currentHighestBid = session?.current_highest_bid || 0;
   const biddingStatus = session?.bidding_status || 'waiting';
@@ -326,6 +327,13 @@ export default function LiveAuction() {
 
         {/* Global Controls & Status */}
         <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setForceNominationView(true)}
+                        className="px-3 py-1.5 rounded-lg bg-[#ffd000]/15 hover:bg-[#ffd000]/25 text-[#ffd000] border border-[#ffd000]/30 text-xs font-bold transition cursor-pointer"
+                      >
+                        Nominate Other Lot
+                      </button>
           {/* Active Increment Pill */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#111215] border border-[#262833] text-xs font-mono">
             <span className="text-[#8b8e99]">Step:</span>
@@ -564,7 +572,7 @@ export default function LiveAuction() {
               </div>
 
               {/* If no player nominated: Show nomination selector WITH inline editing & tick list */}
-              {!currentPlayer ? (
+              {(!currentPlayer || biddingStatus === 'sold' || biddingStatus === 'unsold' || biddingStatus === 'idle' || biddingStatus === 'waiting' || forceNominationView) ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase text-[#8b8e99]">
@@ -648,6 +656,15 @@ export default function LiveAuction() {
                   >
                     Nominate Lot to Active Stage
                   </button>
+                  {currentPlayer && (
+                    <button
+                      type="button"
+                      onClick={() => setForceNominationView(false)}
+                      className="w-full py-2 rounded-lg bg-[#111215] text-[#8b8e99] hover:text-white border border-[#262833] text-xs font-bold transition"
+                    >
+                      ← Return to Active Lot Controls
+                    </button>
+                  )}
                 </div>
               ) : (
                 /* When Lot Active: Sequential ONCE -> TWICE -> SOLD Call Buttons + Hammer Confirmation */
@@ -788,29 +805,34 @@ export default function LiveAuction() {
 
             {recentBids && recentBids.length > 0 ? (
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                {recentBids.map((b) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-[#111215] border border-[#262833] text-xs font-mono"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#646774] font-bold">#{b.bid_number}</span>
-                      <span
-                        className="font-black px-2 py-0.5 rounded text-[10px]"
-                        style={{ backgroundColor: (b.team_color || '#ffd000') + '33', color: b.team_color || '#ffd000' }}
-                      >
-                        {b.team_short || b.team_name}
-                      </span>
-                      <span className="text-white font-sans font-bold">{b.bidder_name}</span>
-                      <span className="text-[#646774] text-[10px]">
-                        {new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </span>
+                {recentBids.map((b, bIdx) => {
+                  const bTeam = teams.find(t => t.id === b.team_id || t.name === b.team_name);
+                  const bColor = b.team_color || bTeam?.primary_color || bTeam?.color || '#ffd000';
+                  const bShort = b.team_short || bTeam?.short_name || bTeam?.shortName || b.team_name || 'TEAM';
+                  const bBidder = b.bidder_name || bTeam?.captain_name || b.team_name || 'Captain';
+                  const bTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Live';
+                  return (
+                    <div
+                      key={b.id || bIdx}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-[#111215] border border-[#262833] text-xs font-mono"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#646774] font-bold">#{b.bid_number || (recentBids.length - bIdx)}</span>
+                        <span
+                          className="font-black px-2 py-0.5 rounded text-[10px]"
+                          style={{ backgroundColor: bColor + '33', color: bColor }}
+                        >
+                          {bShort}
+                        </span>
+                        <span className="text-white font-sans font-bold">{bBidder}</span>
+                        <span className="text-[#646774] text-[10px]">{bTime}</span>
+                      </div>
+                      <div className="font-black text-[#ffd000]">
+                        {formatMoney(b.amount)}
+                      </div>
                     </div>
-                    <div className="font-black text-[#ffd000]">
-                      {formatMoney(b.amount)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-6 text-center text-[#8b8e99] text-xs">

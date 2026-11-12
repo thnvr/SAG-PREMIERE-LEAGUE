@@ -132,6 +132,26 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/result"
+        element={
+          <ProtectedRoute loginPath="/spectator-login">
+            <Layout>
+              <AuctionResults />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/Result"
+        element={
+          <ProtectedRoute loginPath="/spectator-login">
+            <Layout>
+              <AuctionResults />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected Admin Routes */}
       <Route
