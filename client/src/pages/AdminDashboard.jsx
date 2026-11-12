@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney, addTeamToSheets, addPlayerToSheets } from '../services/sheetsService';
+import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney, addTeamToSheets, addPlayerToSheets, getDeletedTeamIds } from '../services/sheetsService';
 import { useAuction } from '../context/AuctionContext';
 import StatsCard from '../components/StatsCard';
 import AwardsPoster from '../components/AwardsPoster';
@@ -142,7 +142,8 @@ export default function AdminDashboard() {
   }, []);
   useEffect(() => {
     if (contextTeams && contextTeams.length > 0) {
-      setTeams(contextTeams);
+      const deletedIds = getDeletedTeamIds();
+      setTeams(contextTeams.filter(t => !deletedIds.has(t.id)));
     }
   }, [contextTeams]);
 
@@ -229,6 +230,7 @@ export default function AdminDashboard() {
 
     try {
       await teamsAPI.delete(team.id);
+      setTeams(prev => prev.filter(t => t.id !== team.id));
       flashMessage(`Franchise "${team.name}" was removed successfully.`);
       loadAllData();
     } catch (err) {

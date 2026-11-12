@@ -89,8 +89,10 @@ export default function LiveAuction() {
   const handleNextCall = () => {
     if (callCount === 0) setCallCount(1);
     else if (callCount === 1) setCallCount(2);
-    else if (callCount === 2) {
+    else {
       setCallCount(3);
+      setWinnerTeamOverride(leadingTeam?.id || teams[0]?.id || '');
+      setSoldPriceOverride(currentHighestBid > 0 ? (currentHighestBid / 100).toString() : ((currentPlayer?.base_price || 50000) / 100).toString());
       setShowSoldConfirm(true);
     }
   };
@@ -119,6 +121,8 @@ export default function LiveAuction() {
   // Losing Bid Tax (Anti-Inflation) modal state
   const [showTaxModal, setShowTaxModal] = useState(false);
   const [taxTeamId, setTaxTeamId] = useState('');
+  const [winnerTeamOverride, setWinnerTeamOverride] = useState('');
+  const [soldPriceOverride, setSoldPriceOverride] = useState('');
   const [taxPercentage, setTaxPercentage] = useState(5);
   const [taxLoading, setTaxLoading] = useState(false);
   const [taxSuccess, setTaxSuccess] = useState(null);
@@ -214,11 +218,19 @@ export default function LiveAuction() {
   };
 
   const handleConfirmSold = async () => {
+    const targetTeamId = winnerTeamOverride || leadingTeam?.id || session?.leading_team_id || teams[0]?.id;
+    const targetAmount = soldPriceOverride ? parseFloat(soldPriceOverride) * 100 : (currentHighestBid || currentPlayer?.base_price || 50000);
+
+    if (!targetTeamId) {
+      setActionError('Please select the winning franchise to award the player');
+      return;
+    }
+
     setShowSoldConfirm(false);
     setActionError(null);
     setActionLoading(true);
     try {
-      await markSold();
+      await markSold(targetTeamId, targetAmount);
     } catch (err) {
       setActionError(err.message || 'Sale confirmation failed');
     } finally {
@@ -280,15 +292,15 @@ export default function LiveAuction() {
     try {
       const res = await auctionAPI.kickPlayer({
         playerId: kickTarget.player.id,
-        teamId: kickTarget.team.id
+        teamId: kickTarget.team?.id
       });
-      setKickSuccessMsg(`Successfully removed ${kickTarget.player.name} from ${kickTarget.team.name}!`);
+      setKickSuccessMsg(`Successfully removed ${kickTarget.player.name} from ${kickTarget.team.name}! Refunded ${res.formattedRefund || ''}`);
       setTimeout(() => {
         setKickTarget(null);
         setKickStep(1);
         setKickConfirmText('');
         setKickSuccessMsg(null);
-      }, 2000);
+      }, 1500);
     } catch (err) {
       setActionError(err.message || 'Failed to remove player from team');
     } finally {
@@ -1211,10 +1223,12 @@ export default function LiveAuction() {
                     Cancel
                   </button>
                   <button
-                    onClick={() => setKickStep(2)}
-                    className="py-2.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-wider shadow transition"
+                    onClick={handleExecuteKickPlayer}
+                    disabled={kickLoading}
+                    className="py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    Proceed to Verification →
+                    <UserX className="w-4 h-4" />
+                    <span>{kickLoading ? 'Removing...' : 'Confirm Kick & Refund'}</span>
                   </button>
                 </div>
               </>
@@ -1272,19 +1286,53 @@ export default function LiveAuction() {
           onClose={() => setShowSoldConfirm(false)}
           title="Confirm Hammer Fall - SOLD"
         >
-          <div className="space-y-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#ffd000]/20 text-[#ffd000] flex items-center justify-center mx-auto">
+          <div className="space-y-4">
+            <div className="w-14 h-14 rounded-full bg-[#ffd000]/20 text-[#ffd000] flex items-center justify-center mx-auto">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <div>
+
+            <div className="text-center">
               <h3 className="text-lg font-black text-white uppercase">
-                Sell {currentPlayer?.name} to {leadingTeam?.name}?
+                Hammer Fall — Award Player Lot
               </h3>
-              <p className="text-xs text-[#8b8e99] mt-1">
-                Final hammer price will be locked at <strong className="text-[#ffd000] font-mono text-sm">{formatMoney(currentHighestBid)}</strong> and deducted from {leadingTeam?.name}'s purse.
+              <p className="text-xs text-[#8b8e99] mt-0.5">
+                Lock in the final transfer valuation and assign {currentPlayer?.name || 'player'} to the franchise roster.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 pt-3">
+
+            <div className="p-3.5 rounded-xl bg-[#111215] border border-[#262833] space-y-3 text-xs">
+              <div>
+                <label className="block text-[10px] text-[#8b8e99] uppercase font-bold mb-1">
+                  Winning Franchise
+                </label>
+                <select
+                  value={winnerTeamOverride || leadingTeam?.id || teams[0]?.id || ''}
+                  onChange={(e) => setWinnerTeamOverride(e.target.value)}
+                  className="w-full bg-[#18191f] border border-[#262833] rounded-lg px-3 py-2 text-xs text-white font-bold outline-none focus:border-[#ffd000]"
+                >
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.short_name}) — Purse: {formatMoney(t.remainingPurse ?? t.remaining_purse)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-[#8b8e99] uppercase font-bold mb-1">
+                  Final Hammer Price (₹ Rupees)
+                </label>
+                <input
+                  type="number"
+                  step="50"
+                  value={soldPriceOverride}
+                  onChange={(e) => setSoldPriceOverride(e.target.value)}
+                  className="w-full bg-[#18191f] border border-[#262833] rounded-lg px-3 py-2 text-xs text-[#ffd000] font-black font-mono outline-none focus:border-[#ffd000]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 onClick={() => setShowSoldConfirm(false)}
                 className="py-2.5 rounded-lg bg-[#111215] hover:bg-[#22242d] text-xs font-bold text-white border border-[#262833]"
@@ -1294,9 +1342,10 @@ export default function LiveAuction() {
               <button
                 onClick={handleConfirmSold}
                 disabled={actionLoading}
-                className="py-2.5 rounded-lg bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] text-xs font-black uppercase tracking-wider shadow"
+                className="py-2.5 rounded-lg bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] text-xs font-black uppercase tracking-wider shadow cursor-pointer transition flex items-center justify-center gap-1.5"
               >
-                {actionLoading ? 'Finalizing...' : 'CONFIRM SALE'}
+                <CheckCircle className="w-4 h-4" />
+                <span>{actionLoading ? 'Finalizing...' : 'CONFIRM SALE'}</span>
               </button>
             </div>
           </div>

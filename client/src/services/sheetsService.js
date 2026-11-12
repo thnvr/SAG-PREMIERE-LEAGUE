@@ -66,6 +66,42 @@ const STORAGE_KEY_PLAYERS = 'sag_sheets_players';
 const STORAGE_KEY_TEAMS = 'sag_sheets_teams';
 const STORAGE_KEY_CUSTOM_PLAYERS = 'sag_custom_players';
 const STORAGE_KEY_PURSE_OVERRIDES = 'sag_team_purse_overrides';
+const STORAGE_KEY_DELETED_TEAMS = 'sag_deleted_teams';
+const STORAGE_KEY_KICKED_PLAYERS = 'sag_kicked_players';
+
+export function getDeletedTeamIds() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DELETED_TEAMS);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveDeletedTeamId(id) {
+  try {
+    const ids = getDeletedTeamIds();
+    ids.add(id);
+    localStorage.setItem(STORAGE_KEY_DELETED_TEAMS, JSON.stringify(Array.from(ids)));
+  } catch {}
+}
+
+export function getKickedPlayerIds() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_KICKED_PLAYERS);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveKickedPlayerId(id) {
+  try {
+    const ids = getKickedPlayerIds();
+    ids.add(id);
+    localStorage.setItem(STORAGE_KEY_KICKED_PLAYERS, JSON.stringify(Array.from(ids)));
+  } catch {}
+}
 
 export function getPurseOverrides() {
   try {
@@ -293,7 +329,9 @@ export async function fetchFullAuctionState() {
           }
         }
 
+        const kickedPlayerIds = getKickedPlayerIds();
         const enrichedRemotePlayers = remotePlayers.map(rp => {
+          const isKicked = kickedPlayerIds.has(rp.id);
           const localMatch = allKnownLocal.find(
             lp => (lp.id && rp.id && String(lp.id).toLowerCase() === String(rp.id).toLowerCase()) ||
                   (lp.name && rp.name && lp.name.trim().toLowerCase() === rp.name.trim().toLowerCase())
@@ -301,6 +339,12 @@ export async function fetchFullAuctionState() {
           return normalizePlayer({
             ...(localMatch || {}),
             ...rp,
+            status: isKicked ? 'available' : (rp.status || localMatch?.status || 'available'),
+            auction_status: isKicked ? 'upcoming' : (rp.auction_status || localMatch?.auction_status || 'available'),
+            team_id: isKicked ? '' : (rp.team_id ?? localMatch?.team_id ?? ''),
+            sold_to_team_id: isKicked ? null : (rp.sold_to_team_id ?? localMatch?.sold_to_team_id ?? null),
+            sold_price: isKicked ? null : (rp.sold_price ?? localMatch?.sold_price ?? null),
+            purchase_price: isKicked ? null : (rp.purchase_price ?? localMatch?.purchase_price ?? null),
             overall_rating: rp.overall_rating || localMatch?.overall_rating,
             speed_rating: rp.speed_rating || localMatch?.speed_rating,
             shooting_rating: rp.shooting_rating || localMatch?.shooting_rating,
@@ -318,9 +362,10 @@ export async function fetchFullAuctionState() {
           ...enrichedRemotePlayers
         ];
 
-        // 2. Process and merge Teams with local purse overrides AND enriched squads
-        const remoteTeams = Array.isArray(data.teams) ? data.teams : [];
-        const localTeams = getLocalTeams();
+        // 2. Process and merge Teams with local purse overrides AND enriched squads (respecting deletions)
+        const deletedTeamIds = getDeletedTeamIds();
+        const remoteTeams = (Array.isArray(data.teams) ? data.teams : []).filter(rt => !deletedTeamIds.has(rt.id));
+        const localTeams = getLocalTeams().filter(lt => !deletedTeamIds.has(lt.id));
         const nonDuplicateLocalTeams = localTeams.filter(
           lt => !remoteTeams.some(rt => rt.id === lt.id || (rt.short_name && lt.short_name && rt.short_name.toUpperCase() === lt.short_name.toUpperCase()))
         );
@@ -592,9 +637,11 @@ export const teamsAPI = {
   },
 
   delete: async (id) => {
+    saveDeletedTeamId(id);
     const list = getLocalTeams();
     const updated = list.filter((t) => t.id !== id);
     saveLocalTeams(updated);
+    callSheetsAPI({ action: 'deleteTeam', teamId: id }).catch(() => {});
     return true;
   },
 };
@@ -657,36 +704,42 @@ export const auctionAPI = {
   },
 
   kickPlayer: async ({ playerId, teamId }) => {
-    if (!playerId || !teamId) throw new Error('Invalid kick parameters');
-    // Find player
+    if (!playerId) throw new Error('Invalid player ID for kick');
+    saveKickedPlayerId(playerId);
+
+    // 1. Reset player in local players
     const playerList = getLocalPlayers();
     const pIdx = playerList.findIndex(p => p.id === playerId);
     let refundAmt = 0;
     if (pIdx !== -1) {
       refundAmt = Number(playerList[pIdx].purchase_price || playerList[pIdx].sold_price || 0);
-      // Reset player status back to available
       playerList[pIdx].status = 'available';
       playerList[pIdx].auction_status = 'upcoming';
       playerList[pIdx].sold_to_team_id = null;
+      playerList[pIdx].team_id = '';
       playerList[pIdx].purchase_price = null;
       playerList[pIdx].sold_price = null;
       saveLocalPlayers(playerList);
     }
-    // Refund purse to team and remove from squad
-    const teamList = getLocalTeams();
-    const tIdx = teamList.findIndex(t => t.id === teamId);
-    if (tIdx !== -1) {
-      const prevPurse = Number(teamList[tIdx].remaining_purse ?? teamList[tIdx].remainingPurse ?? 0);
-      const newPurse = prevPurse + refundAmt;
-      teamList[tIdx].remaining_purse = newPurse;
-      teamList[tIdx].remainingPurse = newPurse;
-      teamList[tIdx].availableBiddingPurse = newPurse;
-      teamList[tIdx].squad = (teamList[tIdx].squad || []).filter(p => p.id !== playerId);
-      saveLocalTeams(teamList);
-      savePurseOverride(teamId, teamList[tIdx].total_purse || teamList[tIdx].initial_purse || 0, newPurse);
-      updateTeamPurseInSheets(teamId, teamList[tIdx].total_purse || teamList[tIdx].initial_purse || 0, newPurse).catch(() => {});
+
+    // 2. Refund purse to team and remove from squad
+    const targetTeamId = teamId || playerList[pIdx]?.sold_to_team_id || playerList[pIdx]?.team_id;
+    if (targetTeamId) {
+      const teamList = getLocalTeams();
+      const tIdx = teamList.findIndex(t => t.id === targetTeamId);
+      if (tIdx !== -1) {
+        const prevPurse = Number(teamList[tIdx].remaining_purse ?? teamList[tIdx].remainingPurse ?? 0);
+        const newPurse = prevPurse + refundAmt;
+        teamList[tIdx].remaining_purse = newPurse;
+        teamList[tIdx].remainingPurse = newPurse;
+        teamList[tIdx].availableBiddingPurse = newPurse;
+        teamList[tIdx].squad = (teamList[tIdx].squad || []).filter(p => p.id !== playerId);
+        saveLocalTeams(teamList);
+        savePurseOverride(targetTeamId, teamList[tIdx].total_purse || teamList[tIdx].initial_purse || 0, newPurse);
+        updateTeamPurseInSheets(targetTeamId, teamList[tIdx].total_purse || teamList[tIdx].initial_purse || 0, newPurse).catch(() => {});
+      }
     }
-    callSheetsAPI({ action: 'kickPlayer', playerId, teamId }).catch(() => {});
+    callSheetsAPI({ action: 'kickPlayer', playerId, teamId: targetTeamId }).catch(() => {});
     return { success: true, refundAmt, formattedRefund: formatMoney(refundAmt) };
   },
 
