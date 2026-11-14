@@ -2,6 +2,7 @@
   "version": 2,
   "buildCommand": "node build.cjs",
   "outputDirectory": "client/dist",
+  "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
