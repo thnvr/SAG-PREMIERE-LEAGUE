@@ -37,6 +37,7 @@ export default function Layout({ children }) {
 
   const navItems = [
     { label: 'HOME', path: '/', icon: Trophy },
+    { label: 'TEAMS', path: '/#teams-section', icon: Shield },
     { label: 'CAPTAINS DESK', path: '/captains-dashboard', icon: Shield },
     { label: 'LIVE AUCTION', path: '/auction', icon: Gavel },
     { label: 'PLAYERS', path: '/players', icon: Users },

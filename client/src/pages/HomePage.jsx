@@ -252,7 +252,7 @@ export default function HomePage() {
       {/* =========================================================================
           SECTION 2: THREE COMPETING FRANCHISES (Dark Arena Theme)
          ========================================================================= */}
-      <section className="py-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      <section id="teams-section" className="py-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full scroll-mt-20">
         <div className="flex items-center justify-between pb-6 mb-6 border-b border-[#22242b]">
           <div>
             <div className="inline-flex items-center gap-2 text-[#ffd000] text-xs font-black uppercase tracking-widest mb-1">
