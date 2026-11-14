@@ -6,7 +6,7 @@
   "scripts": {
     "server": "node server/index.js",
     "start": "node server/index.js",
-    "build": "cd client && npm run build",
+    "build": "node build.cjs",
     "client": "cd client && npx vite --host",
     "client:build": "cd client && npx vite build",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
