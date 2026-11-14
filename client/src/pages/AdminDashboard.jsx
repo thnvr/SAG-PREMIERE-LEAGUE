@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, teamsAPI, playersAPI, awardsAPI, formatMoney, addTeamToSheets, addPlayerToSheets, getDeletedTeamIds } from '../services/sheetsService';
+import { adminAPI, teamsAPI, playersAPI, awardsAPI, auctionAPI, formatMoney, addTeamToSheets, addPlayerToSheets, getDeletedTeamIds } from '../services/sheetsService';
 import { useAuction } from '../context/AuctionContext';
 import StatsCard from '../components/StatsCard';
 import AwardsPoster from '../components/AwardsPoster';
@@ -57,6 +57,29 @@ export default function AdminDashboard() {
   const [showAddBadgeModal, setShowAddBadgeModal] = useState(false);
   const [fixingTeamPurse, setFixingTeamPurse] = useState(null); // team object being edited for purse
   const [newPurseAmountRupees, setNewPurseAmountRupees] = useState('');
+  const [selectedViewTeamId, setSelectedViewTeamId] = useState(null);
+  const [kickLoadingPlayerId, setKickLoadingPlayerId] = useState(null);
+
+  // Kick/Remove player from franchise handler
+  const handleRemovePlayerFromTeam = async (player, team) => {
+    if (!player || !team) return;
+    const confirmMsg = `Are you sure you want to remove "${player.name}" from franchise "${team.name}"?\n\nThe purchase price of ${formatMoney(player.purchase_price || player.sold_price || 0)} will be fully refunded to ${team.name}'s purse, and ${player.name} will be returned to the auction pool as AVAILABLE.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setKickLoadingPlayerId(player.id);
+    try {
+      const res = await auctionAPI.kickPlayer({
+        playerId: player.id,
+        teamId: team.id
+      });
+      flashMessage(`Successfully removed "${player.name}" from ${team.name}! Refunded ${res.formattedRefund || 'purse'}.`);
+      loadAllData();
+    } catch (err) {
+      flashMessage(err.message || 'Failed to remove player from team', true);
+    } finally {
+      setKickLoadingPlayerId(null);
+    }
+  };
 
   // Add Team Form
   const [teamForm, setTeamForm] = useState({
@@ -520,6 +543,7 @@ export default function AdminDashboard() {
           { id: 'overview', label: 'League Overview & Stats', icon: Activity },
           { id: 'spin', label: 'Spin Player Auction', icon: Shuffle, badge: 'NEW' },
           { id: 'poster', label: 'Awards & Poster Generator', icon: Trophy, badge: 'HOT' },
+          { id: 'view-teams', label: 'View Teams & Rosters', icon: Eye, badge: 'SQUAD' },
           { id: 'teams', label: 'Franchises & Fix Purse', icon: Shield },
           { id: 'players', label: 'Player Registry', icon: Users },
           { id: 'badges', label: 'Badge Studio', icon: Award }
@@ -576,6 +600,200 @@ export default function AdminDashboard() {
             availableTeams={teams}
             availableBadges={badges}
           />
+        </div>
+      )}
+
+      
+      {/* ================= TAB: VIEW TEAMS & SQUAD ROSTERS ================= */}
+      {activeTab === 'view-teams' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-[#18191f] border border-[#262833]">
+            <div>
+              <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Eye className="w-5 h-5 text-[#ffd000]" />
+                <span>Franchise Intelligence &amp; Squad Rosters</span>
+              </h3>
+              <p className="text-xs text-[#8b8e99] mt-0.5">
+                Inspect complete team financials, live signed player rosters, and manage squad allocations with 1-click player removal &amp; purse refund.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/captains-dashboard"
+                className="px-4 py-2 rounded-xl bg-[#111215] hover:bg-[#23252d] border border-[#ffd000]/40 text-[#ffd000] font-black text-xs uppercase tracking-wider transition flex items-center gap-1.5"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Open Captains Desk &rarr;</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Quick Franchise Filter Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              onClick={() => setSelectedViewTeamId(null)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                selectedViewTeamId === null
+                  ? 'bg-[#ffd000] text-[#0a0b0d] shadow'
+                  : 'bg-[#18191f] text-[#8b8e99] hover:text-white border border-[#262833]'
+              }`}
+            >
+              All Franchises ({teams.length})
+            </button>
+            {teams.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSelectedViewTeamId(t.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
+                  selectedViewTeamId === t.id
+                    ? 'bg-[#ffd000] text-[#0a0b0d] shadow'
+                    : 'bg-[#18191f] text-[#8b8e99] hover:text-white border border-[#262833]'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.primary_color || '#ffd000' }} />
+                <span>{t.short_name || t.name}</span>
+                <span className="text-[10px] opacity-70">({t.squad?.length || 0})</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Franchise Detailed Cards Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {teams
+              .filter((t) => (selectedViewTeamId ? t.id === selectedViewTeamId : true))
+              .map((t) => {
+                const squad = t.squad || [];
+                const maxSquad = t.max_squad_size || 15;
+                const remainingSlots = Math.max(0, maxSquad - squad.length);
+                const spent = Number(t.totalSpent || squad.reduce((sum, p) => sum + Number(p.purchase_price || p.sold_price || 0), 0));
+                const remainingPurse = Number(t.remainingPurse ?? t.remaining_purse ?? (t.initial_purse - spent));
+
+                return (
+                  <div
+                    key={t.id}
+                    className="p-5 sm:p-6 rounded-2xl bg-[#18191f] border border-[#262833] shadow-xl hover:border-[#ffd000]/40 transition space-y-5"
+                  >
+                    {/* Header info */}
+                    <div className="flex items-center justify-between pb-4 border-b border-[#262833]">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm text-[#0a0b0d] shadow-lg flex-shrink-0"
+                          style={{ backgroundColor: t.primary_color || '#ffd000' }}
+                        >
+                          {t.short_name || 'TM'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black text-base text-white uppercase">{t.name}</h4>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#111215] border border-[#2a2d38] text-[#ffd000]">
+                              {t.short_name}
+                            </span>
+                          </div>
+                          <div className="text-xs text-[#8b8e99] mt-0.5 flex items-center gap-3">
+                            <span>Captain: <strong className="text-white">{t.captain_name || 'Leader'}</strong></span>
+                            <span>•</span>
+                            <span>Quota: <strong className="text-white">{squad.length} / {maxSquad}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setFixingTeamPurse(t);
+                            setNewPurseAmountRupees((t.initial_purse / 100).toString());
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#ffd000]/15 hover:bg-[#ffd000]/25 text-[#ffd000] border border-[#ffd000]/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          <span>Fix Purse</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Financial Metrics Strip */}
+                    <div className="grid grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#111215] border border-[#22242d] text-center font-mono">
+                      <div>
+                        <span className="text-[9px] uppercase text-[#6b6e7a] block">Total Purse</span>
+                        <span className="text-xs sm:text-sm font-bold text-white">{formatMoney(t.initial_purse || t.total_purse)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase text-[#6b6e7a] block">Total Spent</span>
+                        <span className="text-xs sm:text-sm font-bold text-rose-400">{formatMoney(spent)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase text-[#6b6e7a] block">Remaining Purse</span>
+                        <span className="text-xs sm:text-sm font-black text-[#ffd000]">{formatMoney(remainingPurse)}</span>
+                      </div>
+                    </div>
+
+                    {/* Signed Squad List */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-black uppercase tracking-wider text-[#8b8e99] flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-[#ffd000]" />
+                          <span>Signed Squad ({squad.length} Players)</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-[#6b6e7a]">
+                          {remainingSlots} open slot{remainingSlots !== 1 ? 's' : ''} left
+                        </span>
+                      </div>
+
+                      {squad.length === 0 ? (
+                        <div className="py-6 px-4 rounded-xl bg-[#111215] border border-dashed border-[#262833] text-center text-xs text-[#8b8e99]">
+                          No players signed to this franchise yet. Nominate and win lots in the Live Auction!
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                          {squad.map((player, pIdx) => {
+                            const cost = Number(player.purchase_price || player.sold_price || player.finalAmount || player.base_price || 0);
+                            const isKicking = kickLoadingPlayerId === player.id;
+
+                            return (
+                              <div
+                                key={player.id || pIdx}
+                                className="p-2.5 rounded-xl bg-[#111215] border border-[#22242d] hover:border-[#ffd000]/30 transition flex items-center justify-between gap-3"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-[#18191f] border border-[#2a2d38] flex items-center justify-center font-bold text-xs text-[#ffd000] flex-shrink-0">
+                                    {player.primary_position || player.position || 'FWD'}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-xs text-white uppercase truncate">
+                                      {player.name}
+                                    </div>
+                                    <span className="text-[10px] text-[#8b8e99] font-mono">
+                                      OVR {player.overall_rating || 80} • {player.preferred_foot || 'R'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 flex-shrink-0 font-mono">
+                                  <span className="text-xs font-black text-[#ffd000]">
+                                    {formatMoney(cost)}
+                                  </span>
+
+                                  <button
+                                    onClick={() => handleRemovePlayerFromTeam(player, t)}
+                                    disabled={isKicking}
+                                    title="Remove player from team and refund purse"
+                                    className="px-2 py-1 rounded bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[10px] font-black uppercase transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  >
+                                    <UserX className="w-3 h-3 text-rose-400" />
+                                    <span>{isKicking ? 'Removing...' : 'Remove'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
 
