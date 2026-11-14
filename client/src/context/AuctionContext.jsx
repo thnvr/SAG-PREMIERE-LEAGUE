@@ -111,13 +111,10 @@ export const AuctionProvider = ({ children }) => {
 
 
   // Poll Google Sheets every 1.5 seconds for real-time updates across screens
-  useEffect(() => {
-    let mounted = true;
-
-    const loadState = async () => {
+  const loadState = async () => {
       try {
         const data = await fetchFullAuctionState();
-        if (data && !data.error && mounted) {
+        if (data && !data.error) {
           if (data.liveState) {
             // Sync incoming live bids into recentBids stream
             if (
@@ -180,8 +177,13 @@ export const AuctionProvider = ({ children }) => {
       }
     };
 
+
+  useEffect(() => {
+    let mounted = true;
     loadState();
-    const interval = setInterval(loadState, 1500);
+    const interval = setInterval(() => {
+      if (mounted) loadState();
+    }, 1500);
     return () => {
       mounted = false;
       clearInterval(interval);
@@ -479,6 +481,7 @@ export const AuctionProvider = ({ children }) => {
         extendTimer,
         skipCurrentPlayer,
         connected: true,
+        refreshState: loadState,
       }}
     >
       {children}

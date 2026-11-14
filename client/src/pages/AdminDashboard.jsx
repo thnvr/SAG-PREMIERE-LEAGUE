@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const { players: contextPlayers = [], teams: contextTeams = [] } = useAuction();
+  const { players: contextPlayers = [], teams: contextTeams = [], refreshState } = useAuction();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'poster' | 'teams' | 'players' | 'badges'
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -73,6 +73,7 @@ export default function AdminDashboard() {
         teamId: team.id
       });
       flashMessage(`Successfully removed "${player.name}" from ${team.name}! Refunded ${res.formattedRefund || 'purse'}.`);
+      if (refreshState) refreshState();
       loadAllData();
     } catch (err) {
       flashMessage(err.message || 'Failed to remove player from team', true);
@@ -198,6 +199,7 @@ export default function AdminDashboard() {
       addTeamToSheets(newTeamObj).catch(() => {});
       await teamsAPI.create(newTeamObj);
       flashMessage(`Franchise "${teamForm.name}" created successfully!`);
+      if (refreshState) refreshState();
       setShowAddTeamModal(false);
       setTeamForm({
         name: '',
@@ -238,6 +240,7 @@ export default function AdminDashboard() {
         )
       );
       flashMessage(`Updated purse for ${fixingTeamPurse.name} to ₹${parseInt(newPurseAmountRupees, 10).toLocaleString('en-IN')}`);
+      if (refreshState) refreshState();
       setFixingTeamPurse(null);
       loadAllData();
     } catch (err) {
