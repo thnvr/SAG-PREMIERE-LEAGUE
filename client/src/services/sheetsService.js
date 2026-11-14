@@ -29,8 +29,8 @@ export const DEFAULT_TEAMS = [
     name: 'SAAG STRIKERS',
     short_name: 'STRIKERS',
     primary_color: '#ff6b35',
-    remaining_purse: 2000000,
-    initial_purse: 2000000,
+    remaining_purse: 20000,
+    initial_purse: 20000,
     max_squad_size: 15,
   },
   {
@@ -38,8 +38,8 @@ export const DEFAULT_TEAMS = [
     name: 'SAAG UNITED',
     short_name: 'UNITED',
     primary_color: '#4ecdc4',
-    remaining_purse: 2000000,
-    initial_purse: 2000000,
+    remaining_purse: 20000,
+    initial_purse: 20000,
     max_squad_size: 15,
   },
   {
@@ -47,8 +47,8 @@ export const DEFAULT_TEAMS = [
     name: 'SAAG FC',
     short_name: 'SAAGFC',
     primary_color: '#45b7d1',
-    remaining_purse: 2000000,
-    initial_purse: 2000000,
+    remaining_purse: 20000,
+    initial_purse: 20000,
     max_squad_size: 15,
   },
 ];
@@ -201,10 +201,8 @@ export function normalizeTeam(t, playersList = null) {
   // Raw total purse resolution
   let rawTotal = override?.total_purse != null
     ? Number(override.total_purse)
-    : (t.total_purse != null && t.total_purse !== '' ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : (t.purse != null ? Number(t.purse) : (t.initial_purse != null ? Number(t.initial_purse) : 2000000))));
+    : (t.total_purse != null && t.total_purse !== '' ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : (t.purse != null ? Number(t.purse) : (t.initial_purse != null ? Number(t.initial_purse) : 20000))));
 
-  // If rawTotal was entered as rupees (e.g. 8000, 20000, 50000 < 100000), convert to paise (*100)
-  // Stored 1:1 in pure rupees
   rawTotal = Number(rawTotal || 0);
 
   const players = playersList || getLocalPlayers();
@@ -232,20 +230,15 @@ export function normalizeTeam(t, playersList = null) {
   }
   const fullSquad = Array.from(mergedSquadMap.values());
 
-  // Calculate actual total spent on squad in paise
+  // Calculate actual total spent on squad
   const squadTotalSpent = fullSquad.reduce((sum, sp) => sum + Number(sp.purchase_price || sp.sold_price || 0), 0);
 
-  // If override remaining purse exists, use it; otherwise compute rawTotal - squadTotalSpent
+  // If sheet explicitly provided remaining_purse or override exists, respect it; otherwise fallback to rawTotal - squadTotalSpent
   let remaining = override?.remaining_purse != null
     ? Number(override.remaining_purse)
     : (t.remaining_purse != null && t.remaining_purse !== '' ? Number(t.remaining_purse) : (rawTotal - squadTotalSpent));
 
-  // If remaining purse was also in rupees without squad deduction, scale it
-  // Stored 1:1 in pure rupees
-  remaining = Number(remaining || 0);
-
-  // Ensure remaining purse never exceeds total purse, and reflects actual squad deductions
-  const finalRemaining = Math.max(0, Math.min(rawTotal, rawTotal - squadTotalSpent));
+  const finalRemaining = Math.max(0, Number(remaining != null ? remaining : (rawTotal - squadTotalSpent)));
   const spent = squadTotalSpent;
   const color = t.color || t.primary_color || '#ffd000';
 
@@ -661,8 +654,8 @@ export const teamsAPI = {
     const list = getLocalTeams();
     const newTeam = normalizeTeam({
       id: teamData.id || 'team_' + Date.now(),
-      total_purse: teamData.initial_purse || 2000000,
-      remaining_purse: teamData.initial_purse || 2000000,
+      total_purse: teamData.initial_purse || 20000,
+      remaining_purse: teamData.initial_purse || 20000,
       squad: [],
       ...teamData,
     });
@@ -854,7 +847,7 @@ export const adminAPI = {
         totalRemainingPurse
       },
       teamSpending: teams.map(t => {
-        const init = Number(t.total_purse ?? t.initial_purse) || 2000000;
+        const init = Number(t.total_purse ?? t.initial_purse) || 20000;
         const rem = Number(t.remaining_purse ?? t.remainingPurse ?? init);
         return {
           id: t.id,
@@ -954,19 +947,19 @@ export const awardsAPI = {
     return null;
   },
 
-  fixTeamPurse: async (teamId, newPursePaise) => {
-    savePurseOverride(teamId, newPursePaise, newPursePaise);
+  fixTeamPurse: async (teamId, newPurseRupees) => {
+    savePurseOverride(teamId, newPurseRupees, newPurseRupees);
     const list = getLocalTeams();
     const idx = list.findIndex(t => t.id === teamId);
     if (idx !== -1) {
-      list[idx].total_purse = newPursePaise;
-      list[idx].initial_purse = newPursePaise;
-      list[idx].remaining_purse = newPursePaise;
-      list[idx].remainingPurse = newPursePaise;
+      list[idx].total_purse = newPurseRupees;
+      list[idx].initial_purse = newPurseRupees;
+      list[idx].remaining_purse = newPurseRupees;
+      list[idx].remainingPurse = newPurseRupees;
       saveLocalTeams(list);
     }
-    updateTeamPurseInSheets(teamId, newPursePaise, newPursePaise).catch(() => {});
-    return list[idx] || { id: teamId, total_purse: newPursePaise, remaining_purse: newPursePaise };
+    updateTeamPurseInSheets(teamId, newPurseRupees, newPurseRupees).catch(() => {});
+    return list[idx] || { id: teamId, total_purse: newPurseRupees, remaining_purse: newPurseRupees };
   }
 };
 

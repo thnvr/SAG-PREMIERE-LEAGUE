@@ -8,8 +8,8 @@ export default function LeagueSettings() {
     season: '2026',
     venue: 'SAG Arena',
     currency: '₹',
-    initial_purse: 2000000,
-    min_bid_increment: 10000,
+    initial_purse: 20000,
+    min_bid_increment: 100,
     countdown_duration: 30,
     countdown_extension: 10,
     extend_on_late_bid: 1,
@@ -148,8 +148,8 @@ export default function LeagueSettings() {
               <input
                 type="number"
                 step="100"
-                value={formData.initial_purse / 100}
-                onChange={(e) => setFormData({ ...formData, initial_purse: parseFloat(e.target.value) * 100 })}
+                value={formData.initial_purse}
+                onChange={(e) => setFormData({ ...formData, initial_purse: parseFloat(e.target.value) || 0 })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
               />
             </div>
@@ -161,8 +161,8 @@ export default function LeagueSettings() {
               <input
                 type="number"
                 step="10"
-                value={formData.min_bid_increment / 100}
-                onChange={(e) => setFormData({ ...formData, min_bid_increment: parseFloat(e.target.value) * 100 })}
+                value={formData.min_bid_increment}
+                onChange={(e) => setFormData({ ...formData, min_bid_increment: parseFloat(e.target.value) || 0 })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
               />
             </div>

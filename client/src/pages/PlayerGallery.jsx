@@ -530,8 +530,8 @@ export default function PlayerGallery() {
                           <input
                             type="number"
                             step="100"
-                            value={editorPlayer.base_price / 100}
-                            onChange={(e) => setEditorPlayer({ ...editorPlayer, base_price: parseFloat(e.target.value) * 100 })}
+                            value={editorPlayer.base_price}
+                            onChange={(e) => setEditorPlayer({ ...editorPlayer, base_price: parseFloat(e.target.value) || 0 })}
                             className="w-full bg-[#18191f] border border-[#262833] rounded-lg px-2.5 py-1.5 text-white font-mono"
                           />
                         </div>

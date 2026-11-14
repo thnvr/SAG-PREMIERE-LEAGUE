@@ -555,8 +555,8 @@ export default function PlayerCardDesigner() {
                     <input
                       type="number"
                       step="100"
-                      value={cardData.base_price / 100}
-                      onChange={(e) => setCardData({ ...cardData, base_price: parseFloat(e.target.value) * 100 })}
+                      value={cardData.base_price}
+                      onChange={(e) => setCardData({ ...cardData, base_price: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
                     />
                   </div>
