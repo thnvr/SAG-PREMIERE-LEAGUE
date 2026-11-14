@@ -1,34 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getLocalTeams, DEFAULT_TEAMS, getDeletedTeamIds } from '../services/sheetsService';
-import { User, Lock, AlertCircle, Shield, Gavel, Zap, CheckCircle2 } from 'lucide-react';
+import { User, Lock, AlertCircle, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [teams, setTeams] = useState([]);
 
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    try {
-      const deleted = getDeletedTeamIds();
-      const local = getLocalTeams().filter(t => !deleted.has(t.id));
-      const def = DEFAULT_TEAMS.filter(t => !deleted.has(t.id));
-      const map = new Map();
-      [...def, ...local].forEach(t => {
-        if (t && t.id && !deleted.has(t.id)) map.set(t.id, t);
-      });
-      setTeams(Array.from(map.values()));
-    } catch {
-      setTeams(DEFAULT_TEAMS);
-    }
-  }, []);
 
   if (user) {
     const destination = location.state?.from?.pathname 
@@ -43,7 +26,7 @@ export default function LoginPage() {
     const cleanPass = password.trim();
 
     if (!cleanUser || !cleanPass) {
-      setError('Please provide both username and password');
+      setError('Please provide both username and password.');
       return;
     }
 
@@ -57,15 +40,10 @@ export default function LoginPage() {
         : (loggedUser?.role === 'captain' ? '/captains-dashboard' : '/auction');
       navigate(destination, { replace: true });
     } catch (err) {
-      setError(err.message || 'Login failed. Please check credentials.');
+      setError(err.message || 'Invalid credentials. Access denied.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSelectTeamHint = (t) => {
-    setUsername(t.short_name || t.name);
-    setPassword(`123@${(t.short_name || 'team').toLowerCase()}`);
   };
 
   return (
@@ -81,7 +59,7 @@ export default function LoginPage() {
             SAG <span className="text-[#ffd000]">PREMIERE LEAGUE</span>
           </h1>
           <p className="text-[10px] sm:text-xs text-[#8b8e99] font-bold uppercase tracking-widest mt-1">
-            Manual Sign In Portal • All Roles
+            Official Access Portal
           </p>
         </div>
 
@@ -94,11 +72,11 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* MANUAL LOGIN FORM */}
+          {/* AUTHENTIC MANUAL LOGIN FORM */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-[#8b8e99] mb-1.5">
-                Username / Role / Team Short Name
+                Username
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5c5f6e]">
@@ -108,9 +86,10 @@ export default function LoginPage() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. HEAD, ADMIN, STK, UTD, SFC, MLK"
+                  placeholder="Enter username"
                   className="w-full pl-10 pr-4 py-3 rounded-lg bg-[#111215] border border-[#262833] text-white text-sm focus:outline-none focus:border-[#ffd000] transition"
                   required
+                  autoComplete="username"
                 />
               </div>
             </div>
@@ -127,9 +106,10 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Enter password"
                   className="w-full pl-10 pr-4 py-3 rounded-lg bg-[#111215] border border-[#262833] text-white text-sm focus:outline-none focus:border-[#ffd000] transition"
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
@@ -139,63 +119,10 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-3.5 rounded-lg bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(255,208,0,0.35)] transition hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 mt-2 cursor-pointer flex items-center justify-center gap-2"
             >
-              <Zap className="w-4 h-4 fill-current" />
-              <span>{loading ? 'AUTHENTICATING...' : 'SIGN IN TO PORTAL'}</span>
+              <ShieldCheck className="w-4 h-4" />
+              <span>{loading ? 'AUTHENTICATING...' : 'SIGN IN'}</span>
             </button>
           </form>
-
-          {/* Quick Helper Credentials Guide */}
-          <div className="p-3.5 rounded-xl bg-[#111215] border border-[#262833] space-y-2.5">
-            <div className="text-[10px] font-black uppercase text-[#8b8e99] tracking-wider flex items-center gap-1.5">
-              <span>Credential Reference Directory</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div 
-                onClick={() => { setUsername('HEAD'); setPassword('123@head'); }}
-                className="p-2 rounded bg-[#18191f] border border-[#2a2d38] hover:border-[#ffd000]/60 cursor-pointer transition flex flex-col"
-              >
-                <span className="font-bold text-white flex items-center gap-1">
-                  <Gavel className="w-3.5 h-3.5 text-[#ffd000]" />
-                  <span>Auctioneer</span>
-                </span>
-                <span className="text-[10px] text-[#8b8e99] font-mono mt-0.5">HEAD / 123@head</span>
-              </div>
-
-              <div 
-                onClick={() => { setUsername('ADMIN'); setPassword('123@admin'); }}
-                className="p-2 rounded bg-[#18191f] border border-[#2a2d38] hover:border-[#ffd000]/60 cursor-pointer transition flex flex-col"
-              >
-                <span className="font-bold text-white flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5 text-[#ffd000]" />
-                  <span>Super Admin</span>
-                </span>
-                <span className="text-[10px] text-[#8b8e99] font-mono mt-0.5">ADMIN / 123@admin</span>
-              </div>
-            </div>
-
-            {/* Franchise Captain Logins */}
-            {teams.length > 0 && (
-              <div className="pt-2 border-t border-[#22242d] space-y-1.5">
-                <span className="text-[10px] text-[#8b8e99] uppercase font-bold block">
-                  Team Captain Logins (Click to autofill):
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {teams.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => handleSelectTeamHint(t)}
-                      className="px-2 py-1 rounded bg-[#18191f] hover:bg-[#23252d] border border-[#2a2d38] hover:border-[#ffd000] text-[10px] font-bold text-white transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.primary_color || '#ffd000' }} />
-                      <span>{t.short_name || t.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
 
           <div className="mt-5 pt-4 border-t border-[#262833] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
             <Link
