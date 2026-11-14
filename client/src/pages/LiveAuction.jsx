@@ -93,7 +93,7 @@ export default function LiveAuction() {
     else {
       setCallCount(3);
       setWinnerTeamOverride(leadingTeam?.id || teams[0]?.id || '');
-      setSoldPriceOverride(currentHighestBid > 0 ? (currentHighestBid / 100).toString() : ((currentPlayer?.base_price || 50000) / 100).toString());
+      setSoldPriceOverride(currentHighestBid > 0 ? currentHighestBid.toString() : (currentPlayer?.base_price || 50000).toString());
       setShowSoldConfirm(true);
     }
   };
@@ -220,7 +220,7 @@ export default function LiveAuction() {
 
   const handleConfirmSold = async () => {
     const targetTeamId = winnerTeamOverride || leadingTeam?.id || session?.leading_team_id || teams[0]?.id;
-    const targetAmount = soldPriceOverride ? parseFloat(soldPriceOverride) * 100 : (currentHighestBid || currentPlayer?.base_price || 50000);
+    const targetAmount = soldPriceOverride ? parseFloat(soldPriceOverride) : (currentHighestBid || currentPlayer?.base_price || 50000);
 
     if (!targetTeamId) {
       setActionError('Please select the winning franchise to award the player');
@@ -664,8 +664,8 @@ export default function LiveAuction() {
                       <input
                         type="number"
                         step="50"
-                        value={nominationOverrides.base_price / 100}
-                        onChange={(e) => setNominationOverrides({ ...nominationOverrides, base_price: parseFloat(e.target.value) * 100 })}
+                        value={nominationOverrides.base_price}
+                        onChange={(e) => setNominationOverrides({ ...nominationOverrides, base_price: parseFloat(e.target.value) })}
                         className="w-full bg-[#111215] border border-[#262833] rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
                       />
                     </div>

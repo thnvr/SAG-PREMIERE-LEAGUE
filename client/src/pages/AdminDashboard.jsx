@@ -194,7 +194,7 @@ export default function AdminDashboard() {
         short_name: teamForm.short_name.toUpperCase(),
         primary_color: teamForm.primary_color,
         secondary_color: teamForm.secondary_color,
-        initial_purse: parseInt(teamForm.initial_purse_rupees, 10) * 100,
+        initial_purse: parseInt(teamForm.initial_purse_rupees, 10),
         max_squad_size: parseInt(teamForm.max_squad_size, 10),
         captain_name: teamForm.captain_name || 'Captain',
         logo_url: teamForm.logo_url
@@ -225,19 +225,19 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!fixingTeamPurse || !newPurseAmountRupees) return;
     try {
-      const paiseAmount = parseInt(newPurseAmountRupees, 10) * 100;
-      await awardsAPI.fixTeamPurse(fixingTeamPurse.id, paiseAmount);
+      const rupeeAmount = parseInt(newPurseAmountRupees, 10);
+      await awardsAPI.fixTeamPurse(fixingTeamPurse.id, rupeeAmount);
       // Immediately reflect the updated purse in state
       setTeams((prev) =>
         prev.map((t) =>
           t.id === fixingTeamPurse.id
             ? {
                 ...t,
-                initial_purse: paiseAmount,
-                total_purse: paiseAmount,
-                remaining_purse: paiseAmount,
-                remainingPurse: paiseAmount,
-                availableBiddingPurse: paiseAmount,
+                initial_purse: rupeeAmount,
+                total_purse: rupeeAmount,
+                remaining_purse: rupeeAmount,
+                remainingPurse: rupeeAmount,
+                availableBiddingPurse: rupeeAmount,
               }
             : t
         )
@@ -342,7 +342,7 @@ export default function AdminDashboard() {
         player_number: playerForm.player_number,
         primary_position: playerForm.primary_position,
         secondary_positions: playerForm.secondary_positions ? playerForm.secondary_positions.split(',').map(s => s.trim()) : [],
-        base_price: parseInt(playerForm.base_price_rupees, 10) * 100,
+        base_price: parseInt(playerForm.base_price_rupees, 10),
         age: parseInt(playerForm.age, 10),
         nationality: playerForm.nationality,
         overall_rating: parseInt(playerForm.overall_rating, 10),
@@ -741,7 +741,7 @@ export default function AdminDashboard() {
                         <button
                           onClick={() => {
                             setFixingTeamPurse(t);
-                            setNewPurseAmountRupees((t.initial_purse / 100).toString());
+                            setNewPurseAmountRupees(Number(t.initial_purse || t.total_purse || 0).toString());
                           }}
                           className="px-2.5 py-1.5 rounded-lg bg-[#ffd000]/15 hover:bg-[#ffd000]/25 text-[#ffd000] border border-[#ffd000]/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                         >

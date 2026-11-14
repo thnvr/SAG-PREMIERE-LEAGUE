@@ -29,8 +29,8 @@ export const DEFAULT_TEAMS = [
     name: 'SAAG STRIKERS',
     short_name: 'STRIKERS',
     primary_color: '#ff6b35',
-    remaining_purse: 200000000,
-    initial_purse: 200000000,
+    remaining_purse: 2000000,
+    initial_purse: 2000000,
     max_squad_size: 15,
   },
   {
@@ -38,8 +38,8 @@ export const DEFAULT_TEAMS = [
     name: 'SAAG UNITED',
     short_name: 'UNITED',
     primary_color: '#4ecdc4',
-    remaining_purse: 200000000,
-    initial_purse: 200000000,
+    remaining_purse: 2000000,
+    initial_purse: 2000000,
     max_squad_size: 15,
   },
   {
@@ -47,15 +47,15 @@ export const DEFAULT_TEAMS = [
     name: 'SAAG FC',
     short_name: 'SAAGFC',
     primary_color: '#45b7d1',
-    remaining_purse: 200000000,
-    initial_purse: 200000000,
+    remaining_purse: 2000000,
+    initial_purse: 2000000,
     max_squad_size: 15,
   },
 ];
 
-export function formatMoney(paise) {
-  if (paise == null || isNaN(paise)) return '₹0';
-  return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+export function formatMoney(rupees) {
+  if (rupees == null || isNaN(rupees)) return '₹0';
+  return '₹' + Math.round(Number(rupees)).toLocaleString('en-IN');
 }
 
 export function getToken() {
@@ -201,12 +201,11 @@ export function normalizeTeam(t, playersList = null) {
   // Raw total purse resolution
   let rawTotal = override?.total_purse != null
     ? Number(override.total_purse)
-    : (t.total_purse != null && t.total_purse !== '' ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : (t.purse != null ? Number(t.purse) : (t.initial_purse != null ? Number(t.initial_purse) : 200000000))));
+    : (t.total_purse != null && t.total_purse !== '' ? Number(t.total_purse) : (t.totalPurse != null ? Number(t.totalPurse) : (t.purse != null ? Number(t.purse) : (t.initial_purse != null ? Number(t.initial_purse) : 2000000))));
 
   // If rawTotal was entered as rupees (e.g. 8000, 20000, 50000 < 100000), convert to paise (*100)
-  if (rawTotal > 0 && rawTotal < 100000) {
-    rawTotal = rawTotal * 100;
-  }
+  // Stored 1:1 in pure rupees
+  rawTotal = Number(rawTotal || 0);
 
   const players = playersList || getLocalPlayers();
   // Find all players signed to this team
@@ -242,9 +241,8 @@ export function normalizeTeam(t, playersList = null) {
     : (t.remaining_purse != null && t.remaining_purse !== '' ? Number(t.remaining_purse) : (rawTotal - squadTotalSpent));
 
   // If remaining purse was also in rupees without squad deduction, scale it
-  if (remaining > 0 && remaining < 100000 && squadTotalSpent === 0) {
-    remaining = remaining * 100;
-  }
+  // Stored 1:1 in pure rupees
+  remaining = Number(remaining || 0);
 
   // Ensure remaining purse never exceeds total purse, and reflects actual squad deductions
   const finalRemaining = Math.max(0, Math.min(rawTotal, rawTotal - squadTotalSpent));

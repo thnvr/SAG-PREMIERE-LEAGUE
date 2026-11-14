@@ -437,7 +437,7 @@ export const AuctionProvider = ({ children }) => {
         team_name: t?.name || 'Franchise',
         team_color: t?.primary_color || '#ffd000',
         price: p.sold_price || p.base_price,
-        formattedPrice: '₹' + Math.round((p.sold_price || p.base_price) / 100).toLocaleString('en-IN'),
+        formattedPrice: '₹' + Math.round(Number(p.sold_price || p.base_price || 0)).toLocaleString('en-IN'),
       };
     });
 
