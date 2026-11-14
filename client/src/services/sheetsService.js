@@ -523,15 +523,25 @@ export async function callSheetsAPI(payload) {
   } catch {}
 
   try {
-    await fetch(SHEETS_API_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(payload),
-    });
-    return { success: true };
+    // Try real CORS fetch first (works if Code.gs has proper CORS headers)
+    try {
+      const res = await fetch(SHEETS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      return json;
+    } catch (_corsErr) {
+      // Fall back to no-cors fire-and-forget for environments without CORS support
+      await fetch(SHEETS_API_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+      return { success: true };
+    }
   } catch (err) {
     console.error('[SheetsService] callSheetsAPI error:', err);
     return { error: err.message };
@@ -988,4 +998,11 @@ export async function updateTeamPurseInSheets(teamId, newTotalPurse, newRemainin
     newTotalPurse,
     newRemainingPurse
   });
+}
+export async function syncAllPlayersToSheets(players) {
+  return await callSheetsAPI({ action: 'syncAllPlayers', players });
+}
+
+export async function syncAllTeamsToSheets(teams) {
+  return await callSheetsAPI({ action: 'syncAllTeams', teams });
 }

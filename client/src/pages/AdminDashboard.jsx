@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, teamsAPI, playersAPI, awardsAPI, auctionAPI, formatMoney, addTeamToSheets, addPlayerToSheets, getDeletedTeamIds } from '../services/sheetsService';
+import { adminAPI, teamsAPI, playersAPI, awardsAPI, auctionAPI, formatMoney, addTeamToSheets, addPlayerToSheets, getDeletedTeamIds, syncAllPlayersToSheets, syncAllTeamsToSheets, DEFAULT_TEAMS } from '../services/sheetsService';
+import { DEFAULT_PLAYERS } from '../data/defaultPlayers';
 import { useAuction } from '../context/AuctionContext';
 import StatsCard from '../components/StatsCard';
 import AwardsPoster from '../components/AwardsPoster';
@@ -50,6 +51,8 @@ export default function AdminDashboard() {
   const [actionSuccess, setActionSuccess] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [previewPlayerCard, setPreviewPlayerCard] = useState(null);
+  const [syncingPlayers, setSyncingPlayers] = useState(false);
+  const [syncingTeams, setSyncingTeams] = useState(false);
 
   // Form states
   const [showAddTeamModal, setShowAddTeamModal] = useState(false);
@@ -436,6 +439,39 @@ export default function AdminDashboard() {
     }
   };
 
+  // SYNC ALL PLAYERS → Google Sheets (one-time bulk push)
+  const handleSyncAllPlayers = async () => {
+    if (!window.confirm('This will push all ' + DEFAULT_PLAYERS.length + ' website players to Google Sheets (overwrites existing Players sheet). Continue?')) return;
+    setSyncingPlayers(true);
+    try {
+      const res = await syncAllPlayersToSheets(DEFAULT_PLAYERS);
+      flashMessage('Synced ' + DEFAULT_PLAYERS.length + ' players to Google Sheets! ' + (res?.count ? '(' + res.count + ' rows written)' : ''));
+      if (refreshState) refreshState();
+      loadAllData();
+    } catch (err) {
+      flashMessage(err.message || 'Failed to sync players to Sheets', true);
+    } finally {
+      setSyncingPlayers(false);
+    }
+  };
+
+  // SYNC ALL TEAMS → Google Sheets
+  const handleSyncAllTeams = async () => {
+    const teamsToSync = teams.length > 0 ? teams : DEFAULT_TEAMS;
+    if (!window.confirm('Sync ' + teamsToSync.length + ' teams to Google Sheets? This overwrites the Teams sheet.')) return;
+    setSyncingTeams(true);
+    try {
+      const res = await syncAllTeamsToSheets(teamsToSync);
+      flashMessage('Synced ' + teamsToSync.length + ' teams to Google Sheets!');
+      if (refreshState) refreshState();
+      loadAllData();
+    } catch (err) {
+      flashMessage(err.message || 'Failed to sync teams to Sheets', true);
+    } finally {
+      setSyncingTeams(false);
+    }
+  };
+
   const filteredPlayers = players.filter((p) => {
     const matchesSearch = !playerSearch || p.name.toLowerCase().includes(playerSearch.toLowerCase()) || (p.club && p.club.toLowerCase().includes(playerSearch.toLowerCase()));
     const matchesPos = playerPosFilter === 'ALL' || p.primary_position === playerPosFilter;
@@ -818,6 +854,15 @@ export default function AdminDashboard() {
             >
               + Create New Franchise
             </button>
+            <button
+              onClick={handleSyncAllTeams}
+              disabled={syncingTeams}
+              title="Sync all teams to Google Sheets"
+              className="px-3 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-black text-xs uppercase tracking-wider transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${syncingTeams ? 'animate-spin' : ''}`} />
+              {syncingTeams ? 'Syncing...' : 'Sync Teams → Sheets'}
+            </button>
           </div>
 
           {/* Teams Table & Purse Quick Edit */}
@@ -919,12 +964,23 @@ export default function AdminDashboard() {
               </select>
             </div>
 
-            <button
-              onClick={() => setShowAddPlayerModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] font-black text-xs uppercase tracking-wider shadow transition cursor-pointer"
-            >
-              + Register New Player
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSyncAllPlayers}
+                disabled={syncingPlayers}
+                title="Push all 25 default players to Google Sheets (overwrites Players sheet)"
+                className="px-3 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-black text-xs uppercase tracking-wider transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${syncingPlayers ? 'animate-spin' : ''}`} />
+                {syncingPlayers ? 'Syncing...' : 'Sync All → Sheets'}
+              </button>
+              <button
+                onClick={() => setShowAddPlayerModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-[#ffd000] hover:bg-[#facc15] text-[#0a0b0d] font-black text-xs uppercase tracking-wider shadow transition cursor-pointer"
+              >
+                + Register New Player
+              </button>
+            </div>
           </div>
 
           {/* Players Table */}
